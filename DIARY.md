@@ -13,3 +13,10 @@ This becomes the raw material for the thesis chapters.
   and there was no tool for it, so the 8B model produced nothing usable. Fix: added a `days_between` tool and
   made the loop ask again on an empty reply. Lesson for the thesis: small local models need precise tools,
   and the platform must show and handle empty or failed steps.
+
+## 2026-10-10
+
+- Run npm run hello and its exercises
+- Read Building Effective Agents (Anthropic)
+- Understand messages, system prompts, tokens, temperature and the context window
+- no need to send the project proposal

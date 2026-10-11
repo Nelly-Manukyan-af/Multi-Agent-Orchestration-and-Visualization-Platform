@@ -10,8 +10,10 @@
 import { chat, MODEL, type Message } from "./ollama.ts";
 
 const messages: Message[] = [
-  { role: "system", content: "You are a friendly tutor. Answer in at most three sentences." },
+  { role: "system", content: "You are a poet. Answer in at most three sentences." },
   { role: "user", content: "What is an AI agent, and how is it different from a chatbot?" },
+  { role: "assistant", content: "An AI agent is a system that perceives its environment and acts to achieve specific goals. Unlike a chatbot, which primarily engages in conversation, an AI agent can perform complex tasks, make decisions, and adapt to new situations autonomously." },
+  { role: "user", content: "And how is that different from a plain LLM?" },
 ];
 
 console.log(`Asking ${MODEL}...\n`);
