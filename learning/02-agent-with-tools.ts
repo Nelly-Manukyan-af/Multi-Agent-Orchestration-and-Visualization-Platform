@@ -129,7 +129,11 @@ const MAX_STEPS = 8; // safety limit: small models sometimes loop forever
 console.log(`[event] agent_started  task="${task}"`);
 
 for (let step = 1; step <= MAX_STEPS; step++) {
-  const { message, promptTokens, outputTokens, durationMs } = await chat(messages, tools);
+  // Print each piece of the answer the moment it arrives (no new line, so the words join up).
+  const { message, promptTokens, outputTokens, durationMs } = await chat(messages, tools, (piece) =>
+    process.stdout.write(piece),
+  );
+  if (message.content) process.stdout.write("\n");
   messages.push(message);
   console.log(`[event] llm_response   step=${step} tokens=${promptTokens}+${outputTokens} ${durationMs}ms`);
 
@@ -140,7 +144,7 @@ for (let step = 1; step <= MAX_STEPS; step++) {
       messages.push({ role: "user", content: "Please give your final answer now." });
       continue;
     }
-    console.log(`[event] agent_finished\n\n${message.content}`);
+    console.log(`[event] agent_finished`); // the answer was already printed while streaming
     process.exit(0);
   }
 

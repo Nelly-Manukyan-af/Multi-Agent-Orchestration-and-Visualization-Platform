@@ -36,7 +36,11 @@ export type ChatResult = {
   durationMs: number;
 };
 
-export async function chat(messages: Message[], tools?: ToolDefinition[]): Promise<ChatResult> {
+export async function chat(
+  messages: Message[],
+  tools?: ToolDefinition[],
+  onToken?: (text: string) => void, // called with each new piece of text as it arrives
+): Promise<ChatResult> {
   const response = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -44,21 +48,53 @@ export async function chat(messages: Message[], tools?: ToolDefinition[]): Promi
       model: MODEL,
       messages,
       tools,
-      stream: false, // wait for the whole answer (streaming comes later)
+      stream: true, // send the answer in small pieces, one JSON object per line
       think: false, // Qwen 3 can "think" before answering; off = faster
       options: { temperature: 0.7 }, // 0 = predictable, higher = more creative
     }),
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new Error(`Ollama returned ${response.status}: ${await response.text()}`);
   }
 
-  const data = await response.json();
+  let content = ""; // the full answer, built from the pieces
+  const toolCalls: ToolCall[] = [];
+  let final: StreamChunk | undefined; // the last piece (done: true) carries the token counts
+  let buffer = ""; // network chunks can end in the middle of a line, so keep the rest here
+  const decoder = new TextDecoder();
+
+  for await (const bytes of response.body) {
+    buffer += decoder.decode(bytes, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? ""; // the last line may be unfinished: wait for the next chunk
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const chunk: StreamChunk = JSON.parse(line);
+      const piece = chunk.message?.content ?? "";
+      if (piece) {
+        content += piece;
+        onToken?.(piece);
+      }
+      if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls); // tool calls arrive whole
+      if (chunk.done) final = chunk;
+    }
+  }
+
   return {
-    message: data.message,
-    promptTokens: data.prompt_eval_count ?? 0,
-    outputTokens: data.eval_count ?? 0,
-    durationMs: Math.round((data.total_duration ?? 0) / 1e6),
+    message: { role: "assistant", content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) },
+    promptTokens: final?.prompt_eval_count ?? 0,
+    outputTokens: final?.eval_count ?? 0,
+    durationMs: Math.round((final?.total_duration ?? 0) / 1e6),
   };
 }
+
+// One line of Ollama's streamed reply.
+type StreamChunk = {
+  message?: { content?: string; tool_calls?: ToolCall[] };
+  done: boolean;
+  prompt_eval_count?: number;
+  eval_count?: number;
+  total_duration?: number; // nanoseconds
+};
