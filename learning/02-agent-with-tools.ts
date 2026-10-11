@@ -11,6 +11,7 @@
 // these events to the browser and draw them as a graph. This file is the seed of the thesis.
 
 import { chat, type Message, type ToolDefinition } from "./ollama.ts";
+import {appendFileSync} from "node:fs";
 
 // ---- Tools: plain functions the model is allowed to call ----
 
@@ -58,6 +59,20 @@ const tools: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "save_note",
+      description: "Save a short note to a file so it is kept after the conversation ends. Use this when the user asks you  to remember or save something",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "Text to save to a file" },
+        },
+        required: ["text"],
+      },
+    },
+  },
 ];
 
 function runTool(name: string, args: Record<string, unknown>): string {
@@ -80,6 +95,14 @@ function runTool(name: string, args: Record<string, unknown>): string {
       const days = (Date.parse(String(args.to)) - Date.parse(String(args.from))) / 86_400_000;
       return Number.isNaN(days) ? "Invalid date: use YYYY-MM-DD" : String(Math.round(days));
     }
+    case "save_note": {
+      const text = String(args.text ?? "").trim();
+      if (!text) return "Nothing saved: the note text was empty";
+      const line = `- ${new Date().toISOString().slice(0, 10)}: ${text}\n`;
+      appendFileSync("notes.md", line);
+      return `Saved note: "${text}"`;
+    }
+
     default:
       return `Unknown tool: ${name}`;
   }
