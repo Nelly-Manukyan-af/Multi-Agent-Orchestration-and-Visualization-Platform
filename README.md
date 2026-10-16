@@ -7,6 +7,7 @@ collaborate live as a graph, with every step inspectable and replayable.
 
 | Folder | What | When |
 | --- | --- | --- |
+| `docs/` | [Roadmap](docs/ROADMAP.md) and detailed weekly plans | Whole project |
 | `learning/` | Small exercises, one per week | Weeks 1–3 |
 | `packages/shared/` | Types shared by server and web (the event model) | Started now, grows with the project |
 | `apps/server/` | Orchestrator, API, WebSocket, database | Weeks 4–6 |
