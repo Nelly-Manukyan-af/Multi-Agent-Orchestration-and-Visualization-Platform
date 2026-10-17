@@ -78,3 +78,10 @@ This becomes the raw material for the thesis chapters.
     account; you must write code; the form asks for `facts`/`paragraph` as "Required" input even though nodes fill them
   - Best thing: very little code for a working team; clear role/goal/task idea
   - Most missing: any visual view of the team or the run; no way to look back at a run
+
+  ### `learning/03-debate.ts` (Pro, Con, Judge)
+  - Built the 3-agent debate loop in TypeScript using `ollama.ts` (`Pro` → `Con` for 2 rounds → `Judge` verdict), streaming tokens and emitting `[event]` lines.
+  - **Token growth:** Prompt tokens grew linearly each turn (~50 → 115 → 170 → 230 tokens) because the full debate history is re-sent every turn, while output tokens stayed steady (~50–65 tokens, respecting the 80-word limit).
+  - **Bug 1 (prefix echoing):** Because opponent turns are formatted as `"Con: ..."` in `user` messages, `Pro` started its Round 2 reply with `"Pro: ..."`, causing `"Pro: Pro: ..."` in the output. Fix: instructed agents not to prefix their name and stripped `^(Pro|Con):\s*` when saving turns.
+  - **Bug 2 (role flipping on Round 1):** On the topic `"people must marry"`, `Pro` argued *against* marriage in Round 1 ("Marrying is not a necessity..."). Cause: the system prompt said *"Reply to your opponent's last point"*, so on Turn 1 (with no opponent turn yet) the 8B model treated the topic itself as the opponent's claim and followed its default alignment bias toward personal freedom. In Round 2, after seeing `Con` argue against marriage, `Pro` flipped back to defending marriage, and the `Judge` gave the win to `Con` for being more consistent.
+  - **Fix & thesis lesson:** Strengthened system prompts and the initial user message to explicitly remind the agent of its role (`arguing strictly FOR / AGAINST` as a debate exercise). This matches the *role flipping* failure mode from the CAMEL paper and makes a great example of a "planted problem" for the user study in February/March.
