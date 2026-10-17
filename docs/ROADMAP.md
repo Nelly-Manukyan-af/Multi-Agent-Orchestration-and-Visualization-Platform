@@ -60,6 +60,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### Week 4 · Nov 2–8 · Server and live events
 
 **Goal:** move the agents from a terminal script into a server that sends events to a browser.
+Detailed plan: [`docs/week-4.md`](week-4.md).
 
 - [ ] Learn Fastify basics: routes, JSON bodies, plugins.
 - [ ] Learn WebSockets with `@fastify/websocket` (the server can push messages to the browser at any time).
@@ -72,6 +73,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### Week 5 · Nov 9–15 · The live graph
 
 **Goal:** the core idea of the thesis: watch the agents as a graph.
+Detailed plan: [`docs/week-5.md`](week-5.md).
 
 - [ ] Create `apps/web` with Vite (React + TypeScript).
 - [ ] Do the [React Flow tutorial](https://reactflow.dev/learn).
@@ -84,6 +86,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### Week 6 · Nov 16–22 · Storage and writing
 
 **Goal:** make runs permanent, and start the thesis chapters.
+Detailed plan: [`docs/week-6.md`](week-6.md).
 
 - [ ] SQLite + Drizzle: save every run and all its events (this makes replay possible later).
 - [ ] A form to create an agent: name, role, instructions (system prompt), model.
@@ -95,6 +98,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### Week 7 · Nov 23 – Dec 1 · 40% checkpoint (deadline)
 
 **Goal:** submit a working demo and report.
+Detailed plan: [`docs/week-7.md`](week-7.md).
 
 - [ ] Fix the roughest edges of the demo.
 - [ ] Record a 3-minute demo video and take screenshots.
@@ -110,6 +114,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### December · Team builder and interaction patterns
 
 **Goal:** users build their own teams, and the platform supports several ways for agents to work together.
+Detailed plan: [`docs/december.md`](december.md).
 
 - [ ] Drag-and-drop team builder in React Flow.
 - [ ] **Sequential pipeline:** A → B → C, each gets the previous output.
@@ -119,6 +124,7 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### January · Inspect and replay
 
 **Goal:** understand what happened in a run, step by step.
+Detailed plan: [`docs/january.md`](january.md).
 
 - [ ] Step inspector: click a step to see its exact prompt, reply, tool calls, tokens and time.
 - [ ] Run history list.
@@ -128,16 +134,18 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 ### February · Stretch feature and study prep
 
 **Goal:** one extra feature, an easy setup, and everything ready for the user study.
+Detailed plan: [`docs/february.md`](february.md).
 
 - [ ] One stretch feature: pause a run and edit a message, **or** compare two runs side by side.
 - [ ] Templates: "Debate" and "Research and Report".
 - [ ] Docker Compose: the whole demo starts with one command.
 - [ ] Prepare study runs with planted problems (e.g. an agent that loops or ignores its role).
-- [ ] Ask your university whether the user study needs ethics approval. **Ask early.**
+- [ ] Ask your university whether the user study needs ethics approval. **Ask early.** (Moved to the first week of December, see `december.md` Task 6.)
 
 ### March · Evaluation
 
 **Goal:** show with data that the graph view helps.
+Detailed plan: [`docs/march.md`](march.md).
 
 - [ ] Recruit 8–12 participants.
 - [ ] Run the study: participants find the planted problems with the graph view and with a plain text log,
@@ -146,6 +154,8 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 - [ ] Analyse and chart the results.
 
 ### April · Thesis and presentation (deadline)
+
+Detailed plan: [`docs/april.md`](april.md).
 
 - [ ] Write the **Implementation** chapter.
 - [ ] Write the **Evaluation** chapter.

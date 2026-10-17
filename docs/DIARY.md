@@ -58,5 +58,23 @@ This becomes the raw material for the thesis chapters.
     - Second hierarchical run: the manager did BOTH tasks itself, no delegation at all. Same code, different
       behaviour each run, and the trace makes this visible only if you open the tree.
   - Run from a script without a normal terminal: tracing on but no link printed; it only appeared in an interactive terminal
+
+## 2026-10-17
+  ### LangGraph Studio
+  - Setup: own venv (`~/venvs/langgraph`), `learning/langgraph/` (agent.py + langgraph.json + .env), `langgraph dev`.
+    Needs a free LangSmith account + API key; Studio UI is on smith.langchain.com, but the graph and model run locally.
+    With `LANGSMITH_TRACING=false` a yellow "API key is missing" banner stays on screen (misleading, the key is set)
+  - Define a team: Python code only (nodes = functions, edges = order, shared `State`)
+  - Live view while running: YES, the graph diagram highlights the running node, and the output streams word by word
+  - Inspect one step: each step shows exactly what it changed in the state (`facts`, `paragraph`); hovering a step
+    highlights its node. No exact prompt and no tokens here (those are only in the LangSmith trace, which I turned off)
+  - Replay / time travel: YES. Edit the researcher's `facts` → Fork → only the writer re-runs. Branches are kept
+    ("Fork 3 of 3", arrows to switch). Test: fake fact "purple dragon called Pedro" → the writer used it without question
+  - Breakpoints: Interrupts menu, Before/After per node
+  - Errors: empty topic → red "Error" label on the node + `KeyError('topic')` in the step list
+  - Worked with a local 8B model? Yes, fast (~20 s per run) with `ChatOllama(reasoning=False)`, which really turns off thinking
+  - Best thing: graph + live highlight + edit-and-fork; closest to my platform idea
+  - Most missing: graph shows the code structure, not the conversation (no "who said what to whom"); needs an online
+    account; you must write code; the form asks for `facts`/`paragraph` as "Required" input even though nodes fill them
   - Best thing: very little code for a working team; clear role/goal/task idea
   - Most missing: any visual view of the team or the run; no way to look back at a run
