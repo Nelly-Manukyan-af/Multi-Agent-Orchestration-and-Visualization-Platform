@@ -25,7 +25,6 @@ Each week below has a **goal**, the **tasks**, and **done when**: how you know y
 - [x] Read [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) (Anthropic).
       Learn the difference between a *workflow* (fixed steps) and an *agent* (the model decides the steps).
 - [x] Understand the basic words: messages, system prompt, tokens, temperature, context window.
-- [x] Proposal: not needed to send (decided 2026-10-10).
 - [x] Write the first `DIARY.md` entry.
 
 **Done when:** you can explain what goes into a chat request and what comes back.
@@ -39,7 +38,6 @@ Each week below has a **goal**, the **tasks**, and **done when**: how you know y
 - [x] Run `npm run agent` and explain every line of the loop in `learning/02-agent-with-tools.ts`.
 - [x] Add a tool yourself: `save_note` (writes to `notes.md`).
 - [x] Stream the answer word by word (`stream: true` in `learning/ollama.ts`).
-- [ ] Proposal approved by your supervisor (or confirm it is not needed).
 
 **Done when:** the agent can use several tools in a row, and you see its answer appear live.
 
@@ -48,12 +46,12 @@ Each week below has a **goal**, the **tasks**, and **done when**: how you know y
 **Goal:** go from one agent to a team, and learn what other people have built.
 Detailed plan: [`docs/week-3.md`](week-3.md).
 
-- [ ] Skim five papers: [AutoGen](https://arxiv.org/abs/2308.08155), [CAMEL](https://arxiv.org/abs/2303.17760),
+- [x] Skim five papers: [AutoGen](https://arxiv.org/abs/2308.08155), [CAMEL](https://arxiv.org/abs/2303.17760),
       [ChatDev](https://arxiv.org/abs/2307.07924), [MetaGPT](https://arxiv.org/abs/2308.00352),
       [Generative Agents](https://arxiv.org/abs/2304.03442).
-- [ ] Try AutoGen Studio, CrewAI and LangGraph Studio (about an hour each). Note what they show and what they miss.
-- [ ] Build `learning/03-debate.ts`: Pro, Con and Judge agents debating in the terminal.
-- [ ] Draft the literature review and its comparison table.
+- [x] Try AutoGen Studio, CrewAI and LangGraph Studio (about an hour each). Note what they show and what they miss.
+- [x] Build `learning/03-debate.ts`: Pro, Con and Judge agents debating in the terminal.
+- [x] Draft the literature review and its comparison table.
 
 **Done when:** the debate runs end to end, and you can say in one paragraph what existing tools are missing.
 
@@ -159,6 +157,6 @@ Detailed plan: [`docs/april.md`](april.md).
 
 - [ ] Write the **Implementation** chapter.
 - [ ] Write the **Evaluation** chapter.
-- [ ] Write the **Introduction** and **Conclusion**.
+- [ ] Write the **Introduction** and **Conclusion** directions.
 - [ ] Prepare the presentation and a live demo (with a recorded backup).
 - [ ] **Final submission.**

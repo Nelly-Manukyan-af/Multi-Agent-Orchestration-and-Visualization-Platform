@@ -27,167 +27,124 @@ Don't read every page. For each paper: **abstract → figures → one example �
 | [MetaGPT](https://arxiv.org/abs/2308.00352) (2023) | Like ChatDev, but agents follow standard procedures and share documents | Structured outputs instead of free chat |
 | [Generative Agents](https://arxiv.org/abs/2304.03442) (Stanford, 2023) | 25 agents live in a small virtual town | Memory, reflection, and a **visual** world you can watch |
 
-For each paper, write in `DIARY.md`:
-
-1. How do the agents work together? (pipeline, chat, manager and workers, role-play, …)
-2. How does a person **see** what the agents are doing? (text log, visual, nothing)
-3. What problems do the authors mention? (loops, hallucination, agents forgetting their role, cost)
-4. One sentence: what could my platform show better?
-
-**Done when:** you have notes for all five papers.
+Summary and detailed comparative analysis completed in [`comparison_papers.md`](comparison_papers.md) and [`DIARY.md`](DIARY.md).
 
 ---
 
 ## Task 2 · Try three existing tools (about 1 hour each)
 
-All three are Python. Make a separate virtual environment so they don't conflict:
-
-```sh
-python3 -m venv ~/venvs/week3
-source ~/venvs/week3/bin/activate
-```
-
-Use your free local model in all three. Ollama has an OpenAI-compatible address: `http://localhost:11434/v1`
-(model `qwen3:8b`, any text as the API key).
-Install steps change often, so **follow each tool's current quickstart** if a command below fails.
+All three tested locally with Ollama + `qwen3:8b`. Full notes recorded in [`DIARY.md`](DIARY.md).
 
 ### AutoGen Studio
-
-A no-code web UI for building AutoGen agent teams.
-
-```sh
-pip install autogenstudio
-autogenstudio ui --port 8081   # then open http://localhost:8081
-```
-
-Add a model that points to the Ollama address above, build a two-agent team, and give it a small task.
+- **Setup & Interface:** Web UI (`autogenstudio ui --port 8081`). Define agents and teams through forms or JSON.
+- **Live View:** Flat chat log + optional message-flow graph (appends a new node for every message exchanged, creating cluttered graphs).
+- **Inspection & Replay:** Shows message text and token counts; no exact underlying prompt, no per-step execution timing. Graph nodes are not interactive. No step-by-step playback after completion.
+- **Local 8B Model:** Works over Ollama's OpenAI-compatible endpoint, but runs sluggishly; ignores `/no_think` formatting.
+- **Key Takeaways:** Good no-code entry point, but lacks step-level execution diagnostics and structured conversation replay.
 
 ### CrewAI
-
-A Python library where agents have a *role*, a *goal* and *tasks*.
-Follow the quickstart, and set the model to `ollama/qwen3:8b`. Make a two-agent crew (e.g. researcher + writer).
-Note: CrewAI has no visual view of its own by default. That is also a finding.
+- **Setup & Interface:** Python code (`~/venvs/crewai`). Agents configured by Role, Goal, and Backstory; tasks tied to expected outputs.
+- **Live View & Execution:** Terminal logs with colored text boxes. Sequential mode (`learning/crewai/crew.py`) completed fast (46s, 2,372 tokens). Hierarchical mode (`Process.hierarchical`) introduced an autonomous Crew Manager that failed silently: delegated task 1, wrote task 2 itself while bypassing the Writer agent, hallucinated non-existent facts, and consumed ~5× the tokens (12,750 tokens / 12 calls) while declaring "Task Completed".
+- **Inspection & Tracing:** Terminal hides exact prompts. Tracing requires uploading full prompt traces to cloud-hosted `app.crewai.com`.
+- **Key Takeaways:** Clear role abstractions, but complete absence of local visual interaction. Unreliable autonomous delegation is invisible without external cloud tracing.
 
 ### LangGraph Studio
-
-A visual debugger for agents built with LangGraph: shows the agent as a graph and lets you step through it.
-Follow the LangGraph quickstart; `langgraph dev` starts the Studio in your browser.
-It may ask for a free LangSmith account.
-
-### What to note for each tool
-
-Copy this into `DIARY.md` for each tool and fill it in. Take **screenshots**: you will use them in the thesis.
-
-```md
-### <Tool name>
-- Define a team: code / form / drag-and-drop?
-- Live view while running: graph / chat log / nothing?
-- Inspect one step (exact prompt, tokens, tool calls)?
-- Replay a finished run?
-- Worked with a local 8B model? Problems?
-- Best thing:
-- Most missing:
-```
-
-If a tool won't run after ~30 minutes, stop. Note *why* it failed (that is a valid finding) and move on.
-
-**Done when:** you have the notes and screenshots for all three.
+- **Setup & Interface:** Python workflow (`~/venvs/langgraph`), visualized via local LangGraph dev server connected to LangSmith UI.
+- **Live View & Replay:** Excellent live node highlighting and word-by-word streaming. Supports interactive "Time Travel" (editing state attributes like `facts` and forking the workflow).
+- **Local 8B Model:** Fast (~20s) with `ChatOllama(reasoning=False)`.
+- **Key Takeaways:** Graph diagrams depict *code control flow* (functions and state transitions) rather than *social agent communication* (who said what to whom). Requires cloud account integration (LangSmith); purely code-first.
 
 ---
 
 ## Task 3 · Build `learning/03-debate.ts` (about 1–2 days)
 
-Your first multi-agent program, still in the terminal.
+First local multi-agent prototype implemented in [`learning/03-debate.ts`](../learning/03-debate.ts).
 
-### The agents
+### Architecture & Agent Structure
+- **Pro:** Argues in favor of the proposition (`FOR`).
+- **Con:** Argues against the proposition (`AGAINST`).
+- **Judge:** Observes the full debate transcript and delivers an evaluated verdict with 2–3 explicit justifications.
+- **State & Perspective:** Pure Node.js orchestrator managing a shared `turns: Turn[]` list. Each agent's context is synthesized dynamically by `messagesFor(agent, turns, topic)`, projecting previous turns into native `assistant` (self) and `user` (opponent) messages.
 
-| Agent | System prompt (idea) |
-| --- | --- |
-| **Pro** | "You argue FOR the topic. Reply to your opponent's last point. Max 80 words." |
-| **Con** | "You argue AGAINST the topic. Reply to your opponent's last point. Max 80 words." |
-| **Judge** | "You read a debate and pick the winner. Give the winner and 2–3 reasons." |
-
-### The flow
-
-```
-topic → Pro → Con → Pro → Con → (rounds) → Judge → verdict
-```
-
-### The key idea
-
-An agent is just **a name + a system prompt + what it is allowed to see**. All three use the same `chat()`
-from `learning/ollama.ts`. The orchestrator (your loop) decides who speaks next and what they see:
-
-- Pro and Con see the debate so far. Their own past turns are `assistant` messages;
-  the opponent's turns are `user` messages.
-- The Judge sees the whole debate as one text, with each turn labelled `Pro:` or `Con:`.
-
-### Steps
-
-1. Make a type `Agent = { name: string; systemPrompt: string }` and create the three agents.
-2. Keep one shared list of turns: `{ speaker: string; text: string }[]`.
-3. Write a function `messagesFor(agent, turns)` that builds that agent's own `Message[]`.
-4. Loop for N rounds (start with 2): Pro speaks, then Con. Stream each reply with `onToken`.
-5. Send the full debate to the Judge and print the verdict.
-6. Print `[event]` lines that name the agents, for example:
-
-```
-[event] debate_started  topic="..."
-[event] agent_started   agent=Pro round=1
-[event] agent_message   from=Pro to=Con  tokens=...  ms=...
-[event] agent_started   agent=Judge
-[event] debate_finished winner=Con
-```
-
-7. Add `"debate": "node learning/03-debate.ts"` to `package.json` and run `npm run debate -- "Remote work is better than office work"`.
-
-### Things to try (note the results in the diary)
-
-- Does an agent forget its side after a few rounds?
-- Do the replies get repetitive?
-- Does the Judge always pick the last speaker? (Swap who goes first and run again.)
-- How many tokens does each round use, and does it grow?
-
-**Why this matters:** in Week 4 this file becomes the orchestrator in `apps/server`, and in Week 5 the
-`agent_message` events become moving edges between Pro, Con and Judge nodes in the graph.
-
-**Done when:** `npm run debate` runs to a verdict, and the events name who talks to whom.
+### Experimental Findings
+1. **Token Dynamics:** Input prompt tokens grow linearly per round (~50 → 115 → 170 → 230 tokens) as the conversation context accumulates, while output tokens remain steady (~50–65 tokens) respecting the 80-word prompt cap.
+2. **Prefix Mirroring:** In multi-turn context, the model mirrors conversation formatting (e.g., prefixing `Pro:` onto its own output), resolved by regex normalization and prompt constraints.
+3. **Role Flipping on Ambiguous Prompts:** When given controversial/absolute topics (e.g., `"people must marry"`), an 8B model's alignment bias can override weak system prompts in Round 1, arguing against the topic unless explicitly instructed to defend the proposition within a formal debate simulation.
+4. **Judge Evaluation:** The Judge agent reliably identifies inconsistencies and delivers structured justifications based on argumentation strength and logical coherence.
 
 ---
 
-## Task 4 · Draft the literature review (about 1–2 days)
+## Task 4 · Literature Review Draft
 
-A first draft of 3–5 pages. Don't polish it yet. Suggested structure:
+### 1. LLM Agents: Foundations and Tool Use
 
-1. **LLM agents**: what an agent is; tool use; ReAct; workflows vs. agents (Building Effective Agents).
-2. **Multi-agent systems**: the five papers, grouped by pattern
-   (role-play: CAMEL; pipeline: ChatDev, MetaGPT; group chat: AutoGen; simulation: Generative Agents).
-3. **Existing tools**: AutoGen Studio, CrewAI, LangGraph Studio (from your Task 2 notes).
-4. **Comparison table** (example below).
-5. **The gap**: one paragraph explaining what none of them does well, which is why your platform is needed.
+An **LLM agent** extends a passive autoregressive language model into an autonomous entity capable of perceiving its environment, reasoning over objectives, and taking actions through external tools. Unlike standard chatbots that operate as single-turn text generators, an agent operates within an execution loop:
 
-### Comparison table (template)
+$$\text{Observation} \longrightarrow \text{Reasoning (Thought)} \longrightarrow \text{Action (Tool Call)} \longrightarrow \text{Environment Feedback}$$
 
-| | AutoGen Studio | CrewAI | LangGraph Studio | ChatDev | **This platform** |
-| --- | --- | --- | --- | --- | --- |
-| Define a team | | | | | visual builder |
-| Live view of the team | | | | | live graph |
-| Inspect one step | | | | | prompt, reply, tokens, time |
-| Replay a run | | | | | timeline |
-| Free local models | | | | | yes (Ollama) |
-| Open source | | | | | yes |
+The foundational paradigm formalizing this cycle is **ReAct** (Yao et al., 2022). ReAct integrates *reasoning traces* and *task-specific actions* in an interleaved manner. Reasoning allows the model to track progress, handle exceptions, and adjust plans, while external actions (e.g., querying search engines, executing Python code, calling calculators) ground the model in real-world facts and overcome core LLM limitations such as arithmetic errors and stale knowledge.
 
-Fill the empty cells from your notes. Be fair: write what they do well too.
-Use a reference manager (Zotero is free) to keep the citations from the start.
+In *Building Effective Agents* (Anthropic, 2024), agentic systems are classified along a spectrum of autonomy:
+- **Workflows:** Systems where LLMs and tools are orchestrated through predefined, hardcoded code paths and state machines (e.g., prompt chaining, routing, parallel voting, orchestrator-workers). Workflows offer high predictability, lower latency, and consistent quality.
+- **Autonomous Agents:** Systems where the LLM dynamically dictates its own execution path, choosing which tools to invoke and when to terminate. While flexible, autonomous agents introduce non-determinism, compounding errors, and infinite loops when small or unaligned models fail to converge.
 
-**Done when:** the draft and the table are complete enough to show your supervisor.
+### 2. Multi-Agent Systems: Architectural Patterns
+
+When tasks grow in complexity, a single agent's context window quickly overflows with verbose tool outputs and reasoning traces. Multi-agent systems decompose problems across specialized agents, leveraging four primary architectural patterns:
+
+#### A. Role-Playing and Dyadic Collaboration: CAMEL
+**CAMEL** (Li et al., 2023) pioneered *inception prompting* to enable autonomous cooperation between two communicative agents: an AI User and an AI Assistant. A third agent ("Task Specifier") generates concrete sub-tasks from an initial prompt. The agents alternate in a strict Instruction-Solution loop:
+- **Strengths:** Eliminates human intervention during task execution; generates extensive synthetic conversational datasets.
+- **Failure Modes:** Exposed critical failure modes in LLM interactions: *role flipping* (agents swapping identities or taking the opposing stance), *instruction looping* (endlessly repeating identical suggestions), and *flake replies* (conversational pleasantries without substance).
+- **Context Cost:** Costs grow quadratically $\mathcal{O}(N^2)$ as message history expands, necessitating hard round caps.
+
+#### B. Software Engineering Pipelines: ChatDev and MetaGPT
+Both frameworks simulate real-world software development teams, but approach inter-agent communication from opposing philosophies:
+- **ChatDev** (Qian et al., 2023) organizes agents (CEO, CTO, Programmer, Reviewer, Tester) into a sequential waterfall pipeline decomposed into phases (Designing, Coding, Testing, Documenting). Within each phase, two agents engage in multi-turn chat. ChatDev introduces *communicative dehallucination*, where the developer agent asks clarifying questions before writing code, and passes only finalized code artifacts across phases to keep context windows compact.
+- **MetaGPT** (Hong et al., 2023) argues that unconstrained natural language chat acts like a "game of telephone," degrading information quality. Instead, MetaGPT encodes **Standard Operating Procedures (SOPs)** into agents, requiring them to produce structured engineering artifacts (Product Requirement Documents, System Architecture diagrams, Data API specifications, Task Lists). Communication is mediated through a global **publish-subscribe message pool**, preventing message overload and achieving higher benchmark reliability (85.9% on HumanEval).
+
+#### C. Dynamic Group Chat and Conversable Agents: AutoGen
+**AutoGen** (Wu et al., 2023) provides a generalized multi-agent programming framework built around *Conversable Agents*. Agents can be powered by LLMs, human operators, or code execution environments. AutoGen supports flexible topologies, notably **Group Chat**, where a centralized `GroupChatManager` dynamically selects which agent speaks next based on current conversation context. While expressive, AutoGen leaves orchestration policies and termination conditions entirely to the developer, leading to unpredictable routing when running smaller open-source models.
+
+#### D. Social Simulation and Cognitive Architectures: Generative Agents
+**Generative Agents** (Park et al., 2023) models 25 autonomous agents inhabiting a virtual sandbox town ("Smallville"). Rather than focusing on task completion, it introduces a comprehensive cognitive architecture:
+1. **Memory Stream:** A comprehensive log of an agent's past experiences, retrieved dynamically using a weighted scoring function combining *Recency*, *Importance*, and *Relevance*.
+2. **Reflection Trees:** Higher-level abstract thoughts synthesized periodically from raw memories to guide long-term behavior.
+3. **Recursive Planning:** Hierarchical decomposition of daily agendas into hourly actions, dynamically revised upon perceiving environmental changes or conversations.
+
+### 3. Existing Developer Tools and Empirical Limitations
+
+To evaluate current tooling, three major frameworks were tested locally using Ollama (`qwen3:8b`):
+
+1. **AutoGen Studio:** Offers a straightforward no-code GUI for constructing agents and groups. However, its visual representation relies on a static message-flow graph where every message spawns a new node, producing visual clutter rather than illuminating agent topology. Furthermore, it lacks step-by-step playback, execution timing benchmarks, and detailed prompt inspectability.
+2. **CrewAI:** Simple high-level abstractions (`Agent`, `Task`, `Crew`). However, terminal logs conceal underlying prompt construction. In testing, hierarchical orchestration failed catastrophically with local 8B models: the manager agent swallowed subtask outputs, hallucinated answers, and consumed $5\times$ more tokens without notifying the user. Tracing is offloaded to a proprietary cloud web service (`app.crewai.com`), providing no local, offline visual interface.
+3. **LangGraph Studio:** Best-in-class workflow inspection, providing live node execution states and state modification ("Time Travel"). However, LangGraph models *computation graphs* (functions, state reducers, and conditional branches) rather than *agent communication* (who communicated what message to whom). Additionally, the studio interface depends on cloud authentication through LangSmith.
+
+### 4. Framework Comparison Table
+
+| Feature / Dimension | AutoGen Studio | CrewAI | LangGraph Studio | ChatDev | **Proposed Platform** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Team Definition** | Form / JSON UI | Python code | Python code | Python config | **Visual Drag-and-Drop + No-Code UI** |
+| **Live Execution View** | Cluttered message graph | Colored text logs | Node highlight (code graph) | 2D pixel-art animation | **Live interactive agent graph + animated edges** |
+| **Interaction Focus** | Message flow | Task execution | Function execution & state | Fixed software pipeline | **Social agent dialogue ("Who talks to whom")** |
+| **Step-Level Inspector** | Text & tokens only | Cloud trace only (app.crewai.com) | State diff only (prompts in cloud) | Final code artifacts | **Local: exact prompt, response, tokens, timing & tools** |
+| **Run Replay** | Static post-run log | None (terminal scrolls) | State fork / re-run | Video-like replay log | **Step-by-step timeline scrubber from event log** |
+| **Supported Topologies** | Group chat, 1-on-1 | Sequential, Hierarchical | Directed StateGraph | Fixed Waterfall | **Sequential, Manager-Worker, Group Discussion** |
+| **Local Model Support** | Yes (via OpenAI URL) | Yes (Ollama) | Yes (Ollama) | Limited (requires OpenAI API) | **Native Ollama integration (Zero cost, offline)** |
+| **Open Source & Local** | Yes | Framework open / Tracing closed | Framework open / Studio hosted | Yes | **100% Local (Fastify + SQLite + React Flow)** |
+
+### 5. The Research Gap
+
+Current multi-agent tools bifurcate into two extremes: developer-oriented Python code frameworks (LangGraph, CrewAI) that conceal interaction dynamics behind dense terminal logs or closed cloud dashboards, and domain-specific rigid pipelines (ChatDev, MetaGPT) that cannot be reconfigured for general interaction patterns. Crucially, **none of the existing platforms provide an accessible, local-first web environment that renders live, message-level agent interactions as an intuitive graph while allowing complete, deterministic post-run replay.**
+
+When multi-agent systems fail—such as when agents fall into infinite conversational loops, suffer role-reversal hallucinations (as observed in CAMEL), or execute erroneous delegation cycles (as observed in CrewAI)—debugging with raw text streams is cognitively overwhelming. There is a distinct need for an orchestration platform built on a unified **event-sourced architecture**, where every system occurrence is recorded as an immutable, typed event. By decoupling agent orchestration from presentation, such a platform enables real-time visual comprehension, detailed per-step telemetry (prompts, tool calls, token usage, execution latency), and non-destructive historical replay, enabling students, researchers, and developers to analyze and debug collaborative intelligence efficiently without relying on commercial cloud APIs.
 
 ---
 
 ## End of week checklist
 
-- [ ] Paper notes in `DIARY.md`
-- [ ] Tool notes + screenshots
-- [ ] `npm run debate` works
-- [ ] Literature review draft + comparison table
-- [ ] Tick the tasks in the [roadmap tracker](https://claude.ai/artifact/SNVKp1dvsXVKaEBKAx5k5p)
+- [x] Paper notes in `DIARY.md`
+- [x] Tool notes + screenshots
+- [x] `npm run debate` works
+- [x] Literature review draft + comparison table
+- [x] Tick the tasks in the [roadmap tracker](https://claude.ai/artifact/SNVKp1dvsXVKaEBKAx5k5p)
