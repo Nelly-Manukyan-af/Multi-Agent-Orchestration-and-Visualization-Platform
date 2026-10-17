@@ -122,20 +122,20 @@ To evaluate current tooling, three major frameworks were tested locally using Ol
 
 ### 4. Framework Comparison Table
 
-| Feature / Dimension | AutoGen Studio | CrewAI | LangGraph Studio | ChatDev | **Proposed Platform** |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Team Definition** | Form / JSON UI | Python code | Python code | Python config | **Visual Drag-and-Drop + No-Code UI** |
-| **Live Execution View** | Cluttered message graph | Colored text logs | Node highlight (code graph) | 2D pixel-art animation | **Live interactive agent graph + animated edges** |
-| **Interaction Focus** | Message flow | Task execution | Function execution & state | Fixed software pipeline | **Social agent dialogue ("Who talks to whom")** |
-| **Step-Level Inspector** | Text & tokens only | Cloud trace only (app.crewai.com) | State diff only (prompts in cloud) | Final code artifacts | **Local: exact prompt, response, tokens, timing & tools** |
-| **Run Replay** | Static post-run log | None (terminal scrolls) | State fork / re-run | Video-like replay log | **Step-by-step timeline scrubber from event log** |
-| **Supported Topologies** | Group chat, 1-on-1 | Sequential, Hierarchical | Directed StateGraph | Fixed Waterfall | **Sequential, Manager-Worker, Group Discussion** |
-| **Local Model Support** | Yes (via OpenAI URL) | Yes (Ollama) | Yes (Ollama) | Limited (requires OpenAI API) | **Native Ollama integration (Zero cost, offline)** |
-| **Open Source & Local** | Yes | Framework open / Tracing closed | Framework open / Studio hosted | Yes | **100% Local (Fastify + SQLite + React Flow)** |
+| Feature / Dimension | AutoGen Studio | CrewAI | LangGraph Studio | **Proposed Platform** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Team Definition** | Form / JSON UI | Python code | Python code | **Visual Drag-and-Drop + No-Code UI** |
+| **Live Execution View** | Cluttered message graph | Colored text logs | Node highlight (code graph) | **Live interactive agent graph + animated edges** |
+| **Interaction Focus** | Message flow | Task execution | Function execution & state | **Social agent dialogue ("Who talks to whom")** |
+| **Step-Level Inspector** | Text & tokens only | Cloud trace only (app.crewai.com) | State diff only (prompts in cloud) | **Local: exact prompt, response, tokens, timing & tools** |
+| **Run Replay** | Static post-run log | None (terminal scrolls) | State fork / re-run | **Step-by-step timeline scrubber from event log** |
+| **Supported Topologies** | Group chat, 1-on-1 | Sequential, Hierarchical | Directed StateGraph | **Sequential, Manager-Worker, Group Discussion** |
+| **Local Model Support** | Yes (via OpenAI URL) | Yes (Ollama) | Yes (Ollama) | **Native Ollama integration (Zero cost, offline)** |
+| **Open Source & Local** | Yes | Framework open / Tracing closed | Framework open / Studio hosted | **100% Local (Fastify + SQLite + React Flow)** |
 
 ### 5. The Research Gap
 
-Current multi-agent tools bifurcate into two extremes: developer-oriented Python code frameworks (LangGraph, CrewAI) that conceal interaction dynamics behind dense terminal logs or closed cloud dashboards, and domain-specific rigid pipelines (ChatDev, MetaGPT) that cannot be reconfigured for general interaction patterns. Crucially, **none of the existing platforms provide an accessible, local-first web environment that renders live, message-level agent interactions as an intuitive graph while allowing complete, deterministic post-run replay.**
+Current multi-agent tools bifurcate into two extremes: developer-oriented Python code frameworks (LangGraph, CrewAI) that conceal interaction dynamics behind dense terminal logs or closed cloud dashboards, and domain-specific rigid pipelines (MetaGPT) that cannot be reconfigured for general interaction patterns. Crucially, **none of the existing platforms provide an accessible, local-first web environment that renders live, message-level agent interactions as an intuitive graph while allowing complete, deterministic post-run replay.**
 
 When multi-agent systems fail—such as when agents fall into infinite conversational loops, suffer role-reversal hallucinations (as observed in CAMEL), or execute erroneous delegation cycles (as observed in CrewAI)—debugging with raw text streams is cognitively overwhelming. There is a distinct need for an orchestration platform built on a unified **event-sourced architecture**, where every system occurrence is recorded as an immutable, typed event. By decoupling agent orchestration from presentation, such a platform enables real-time visual comprehension, detailed per-step telemetry (prompts, tool calls, token usage, execution latency), and non-destructive historical replay, enabling students, researchers, and developers to analyze and debug collaborative intelligence efficiently without relying on commercial cloud APIs.
 
