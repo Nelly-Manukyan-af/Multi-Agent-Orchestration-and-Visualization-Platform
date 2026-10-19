@@ -131,7 +131,7 @@ To evaluate current tooling, three major frameworks were tested locally using Ol
 | **Run Replay** | Static post-run log | None (terminal scrolls) | State fork / re-run | **Step-by-step timeline scrubber from event log** |
 | **Supported Topologies** | Group chat, 1-on-1 | Sequential, Hierarchical | Directed StateGraph | **Sequential, Manager-Worker, Group Discussion** |
 | **Local Model Support** | Yes (via OpenAI URL) | Yes (Ollama) | Yes (Ollama) | **Native Ollama integration (Zero cost, offline)** |
-| **Open Source & Local** | Yes | Framework open / Tracing closed | Framework open / Studio hosted | **100% Local (Fastify + SQLite + React Flow)** |
+| **Open Source & Local** | Yes | Framework open / Tracing closed | Framework open / Studio hosted | **100% Local (Express + SQLite + React Flow)** |
 
 ### 5. The Research Gap
 

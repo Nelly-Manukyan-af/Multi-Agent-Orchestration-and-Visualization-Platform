@@ -60,8 +60,8 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 **Goal:** move the agents from a terminal script into a server that sends events to a browser.
 Detailed plan: [`docs/week-4.md`](week-4.md).
 
-- [ ] Learn Fastify basics: routes, JSON bodies, plugins.
-- [ ] Learn WebSockets with `@fastify/websocket` (the server can push messages to the browser at any time).
+- [ ] Learn Express basics: routes, JSON bodies, static middleware.
+- [ ] Learn WebSockets with the `ws` library (the server can push messages to the browser at any time).
 - [ ] In `apps/server`, turn the debate into an **orchestrator**: code that runs the agents and emits
       typed events (`agent_started`, `llm_token`, `tool_called`, `agent_message`, …) defined in `packages/shared`.
 - [ ] Stream those events to a simple HTML test page and print them there.

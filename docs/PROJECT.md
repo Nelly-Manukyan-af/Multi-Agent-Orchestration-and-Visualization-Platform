@@ -48,7 +48,7 @@ The platform will ship with demo templates, including a **Debate** team (Pro, Co
 
 The system is built around an event log: every agent action is saved as an event and streamed to the browser.
 
-&#91;embedded content: system architecture · browser, server, local services\]
+[embedded content: system architecture · browser, server, local services]
 
 The orchestrator decides which agent acts next. The agent runtime calls the local model and tools. Each step becomes an event (for example `message_sent` or `tool_called`) that is stored in SQLite and pushed to the browser. Live view, replay and metrics all read the same events.
 
@@ -76,7 +76,7 @@ The whole system is written in TypeScript, so the frontend and backend share one
 | --- | --- | --- |
 | Frontend | React, TypeScript, Vite | Widely used, fast development |
 | Graph view | React Flow | Ready-made node graphs, drag-and-drop and animated edges |
-| Backend | Node.js, Fastify, WebSockets | Streams events to the browser as they happen |
+| Backend | Node.js, Express, WebSockets (`ws`) | Mature ecosystem, simple HTTP routes, streaming events via `ws` |
 | Model access | Vercel AI SDK | One interface for chat and tool calling across model providers |
 | Models | Ollama with Qwen 3 8B | Free, runs locally on a 16 GB laptop, supports tool calling |
 | Storage | SQLite with Drizzle ORM | No server to install, typed queries |
@@ -127,4 +127,3 @@ A working prototype, the literature review and the design are due at the 40% che
 | Scope grows beyond the time available | High | High | Core features first; stretch features only after February |
 | New technologies take longer to learn | Medium | Medium | Learning tasks are scheduled in the first six weeks |
 | Too few participants for the user study | Low | Medium | Recruit from classmates early; a smaller study with interviews still gives findings |
-

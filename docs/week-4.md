@@ -6,23 +6,23 @@
 one idea: **every action is an event**, and the live graph, the replay and the metrics are all made from that list.
 This week you build the event stream. Next week you draw it.
 
-**Order:** Fastify basics → shared event types → orchestrator → WebSocket → test page.
+**Order:** Express basics → shared event types → orchestrator → WebSocket (`ws`) → test page.
 
 | Day | Work |
 | --- | --- |
-| Mon | Task 1: Fastify basics |
+| Mon | Task 1: Express basics |
 | Tue | Task 2: shared event types |
 | Wed–Thu | Task 3: the orchestrator |
-| Fri | Task 4: WebSocket |
+| Fri | Task 4: WebSocket (`ws`) |
 | Sat | Task 5: test page + diary |
 
 **Before you start:** `npm run debate` from Week 3 must work. This week reuses it.
 
 ---
 
-## Task 1 · Fastify basics (about half a day)
+## Task 1 · Express basics (about half a day)
 
-Fastify is a small web server library for Node.js. You will use it for the HTTP API and the WebSocket.
+Express is a widely-used, mature web server library for Node.js. You will use it for the HTTP API and static file serving.
 
 1. Create `apps/server/package.json`:
 
@@ -40,31 +40,45 @@ Fastify is a small web server library for Node.js. You will use it for the HTTP 
 2. Install from the **project root** (the `-w` flag installs into one workspace):
 
    ```sh
-   npm install fastify @fastify/websocket @fastify/static -w apps/server
+   npm install express ws cors -w apps/server
+   npm install -D @types/express @types/ws @types/cors -w apps/server
    ```
 
 3. Create `apps/server/src/index.ts` with one route:
 
    ```ts
-   import Fastify from "fastify";
+   import express from "express";
 
-   const app = Fastify({ logger: true });
+   const app = express();
+   app.use(express.json());
 
-   app.get("/health", async () => ({ ok: true }));
+   app.get("/health", (_req, res) => {
+     res.json({ ok: true });
+   });
 
-   await app.listen({ port: 3000 });
+   app.listen(3000, () => {
+     console.log("Server listening on http://localhost:3000");
+   });
    ```
 
 4. Run it: `npm run dev -w apps/server`, then open http://localhost:3000/health.
    `--watch` restarts the server every time you save a file.
 
-5. Add a `POST /echo` route that returns the JSON body it receives. Test it with:
+5. Add a `POST /echo` route that returns the JSON body it receives:
+
+   ```ts
+   app.post("/echo", (req, res) => {
+     res.json(req.body);
+   });
+   ```
+
+   Test it with:
 
    ```sh
    curl -X POST localhost:3000/echo -H 'Content-Type: application/json' -d '{"hello":"world"}'
    ```
 
-**Read:** Fastify docs → "Getting Started" and "Routes" (https://fastify.dev/docs/latest/). Skip the rest for now.
+**Read:** Express docs → "Getting Started" and "Routing" (https://expressjs.com/).
 
 **Done when:** `/health` and `/echo` work.
 
@@ -132,7 +146,7 @@ In Week 3 your debate loop *was* an orchestrator, but it printed text. Now it **
 
 ```
 apps/server/src/
-├── index.ts            ← Fastify server
+├── index.ts            ← Express server + WebSocket setup
 ├── events.ts           ← makeEvent()
 ├── llm/ollama.ts       ← copy of learning/ollama.ts
 └── orchestrator/
@@ -177,26 +191,41 @@ apps/server/src/
 
 ---
 
-## Task 4 · WebSocket (about 1 day)
+## Task 4 · WebSocket with `ws` (about 1 day)
 
 HTTP is "the browser asks, the server answers". A **WebSocket** is an open line in both directions,
 so the server can push each event the moment it happens.
 
-1. Register the plugin and add a route in `index.ts`:
+1. Attach the `ws` server to the Node HTTP server in `index.ts`:
 
    ```ts
-   import websocket from "@fastify/websocket";
+   import express from "express";
+   import { createServer } from "node:http";
+   import { WebSocketServer, WebSocket } from "ws";
+   import { runDebate } from "./orchestrator/debate.js";
 
-   await app.register(websocket);
+   const app = express();
+   app.use(express.json());
 
-   app.get("/ws", { websocket: true }, (socket) => {
+   const server = createServer(app);
+   const wss = new WebSocketServer({ server, path: "/ws" });
+
+   wss.on("connection", (socket) => {
      socket.on("message", async (raw) => {
        const msg = JSON.parse(raw.toString());
        if (msg.type === "start_run") {
          const runId = crypto.randomUUID();
-         await runDebate(runId, msg.topic, (event) => socket.send(JSON.stringify(event)));
+         await runDebate(runId, msg.topic, (event) => {
+           if (socket.readyState === WebSocket.OPEN) {
+             socket.send(JSON.stringify(event));
+           }
+         });
        }
      });
+   });
+
+   server.listen(3000, () => {
+     console.log("Server listening on http://localhost:3000");
    });
    ```
 
@@ -208,10 +237,7 @@ so the server can push each event the moment it happens.
 
    Later you will add `stop_run`, `pause_run`, and so on.
 
-3. If the browser closes the tab during a run, `socket.send` fails. Check `socket.readyState === socket.OPEN`
-   before sending, or the server will log errors.
-
-**Read:** the README of `@fastify/websocket` on GitHub (the "Usage" part).
+3. Always check `socket.readyState === WebSocket.OPEN` before sending so that disconnected clients don't crash the server.
 
 **Done when:** you can connect with a test page (Task 5) and receive events.
 
@@ -221,11 +247,14 @@ so the server can push each event the moment it happens.
 
 Not React yet. A plain page is enough to prove the events arrive live.
 
-1. Create `apps/server/public/index.html` and serve it with `@fastify/static`:
+1. Serve static files from `apps/server/public` with Express:
 
    ```ts
-   import fastifyStatic from "@fastify/static";
-   await app.register(fastifyStatic, { root: new URL("../public", import.meta.url).pathname });
+   import path from "node:path";
+   import { fileURLToPath } from "node:url";
+
+   const __dirname = path.dirname(fileURLToPath(import.meta.url));
+   app.use(express.static(path.join(__dirname, "../public")));
    ```
 
 2. The page has: a text box for the topic, a "Start" button, and a list.

@@ -12,6 +12,7 @@ type BaseEvent = {
 
 export type AgentEvent = BaseEvent &
   (
+    | { type: "llm_token"; agentId: string; text: string } // one small piece of a reply, as it arrives
     | { type: "run_started"; task: string; agentIds: string[] }
     | { type: "agent_started"; agentId: string }
     | { type: "message_sent"; fromAgentId: string; toAgentId: string | "all"; content: string }
