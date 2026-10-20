@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Platform · Week 4 Live Events</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 4px;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .controls-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: opacity 0.2s;
+    }
+
+    button:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .metrics-row {
+      display: flex;
+      gap: 20px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .metric-val {
+      color: var(--text);
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-idle { background: #334155; color: #cbd5e1; }
+    .badge-running { background: #0369a1; color: #e0f2fe; }
+    .badge-completed { background: #15803d; color: #dcfce7; }
+    .badge-failed { background: #b91c1c; color: #fee2e2; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stream-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      min-height: 120px;
+      max-height: 240px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e8f0;
+    }
+
+    .events-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    .event-item {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .event-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #334155;
+    }
+
+    .event-run_started { background: #2563eb; color: #fff; }
+    .event-agent_started { background: #7c3aed; color: #fff; }
+    .event-message_sent { background: #0891b2; color: #fff; }
+    .event-llm_response { background: #9333ea; color: #fff; }
+    .event-agent_finished { background: #059669; color: #fff; }
+    .event-run_finished { background: #d97706; color: #fff; }
+    .event-run_finished.failed { background: #dc2626; color: #fff; }
+
+    .event-meta {
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    .event-body {
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Agent Platform · Week 4</h1>
+      <p class="subtitle">Live event streaming over WebSocket with Express & ws</p>
+    </header>
+
+    <div class="controls-card">
+      <div class="input-row">
+        <input type="text" id="topicInput" value="Remote work is better than office work" placeholder="Enter debate topic..." />
+        <button id="startBtn">Start Debate</button>
+      </div>
+
+      <div class="metrics-row">
+        <div>Status: <span id="statusBadge" class="badge badge-idle">Idle</span></div>
+        <div>Tokens: <span id="tokenCount" class="metric-val">0</span></div>
+        <div>Events: <span id="eventCount" class="metric-val">0</span></div>
+        <div>Avg Delay: <span id="avgLatency" class="metric-val">-</span></div>
+        <div>Last Delay: <span id="lastDelay" class="metric-val">-</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Live Reply Box (Streaming llm_token)</span>
+        <span id="speakerLabel" style="font-family: var(--font-mono); font-size: 0.8rem;"></span>
+      </div>
+      <div class="stream-box" id="streamBox">Click "Start Debate" to begin streaming...</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Event List</span>
+        <span id="runIdLabel" style="font-family: var(--font-mono); font-size: 0.75rem;"></span>
+      </div>
+      <ul class="events-list" id="eventsList">
+        <li class="event-item" style="color: var(--text-muted); text-align: center;">No events yet</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const topicInput = document.getElementById("topicInput");
+    const startBtn = document.getElementById("startBtn");
+    const statusBadge = document.getElementById("statusBadge");
+    const tokenCount = document.getElementById("tokenCount");
+    const eventCount = document.getElementById("eventCount");
+    const avgLatency = document.getElementById("avgLatency");
+    const lastDelay = document.getElementById("lastDelay");
+    const streamBox = document.getElementById("streamBox");
+    const speakerLabel = document.getElementById("speakerLabel");
+    const eventsList = document.getElementById("eventsList");
+    const runIdLabel = document.getElementById("runIdLabel");
+
+    let socket = null;
+    let tokens = 0;
+    let nonTokenEvents = 0;
+    let totalDelay = 0;
+    let delayCount = 0;
+    let currentAgent = null;
+
+    function setStatus(status, label) {
+      statusBadge.className = `badge badge-${status}`;
+      statusBadge.textContent = label;
+    }
+
+    startBtn.addEventListener("click", () => {
+      const topic = topicInput.value.trim();
+      if (!topic) return;
+
+      // Reset
+      tokens = 0;
+      nonTokenEvents = 0;
+      totalDelay = 0;
+      delayCount = 0;
+      currentAgent = null;
+      tokenCount.textContent = "0";
+      eventCount.textContent = "0";
+      avgLatency.textContent = "-";
+      lastDelay.textContent = "-";
+      streamBox.textContent = "";
+      eventsList.innerHTML = "";
+      speakerLabel.textContent = "";
+      runIdLabel.textContent = "";
+
+      startBtn.disabled = true;
+      setStatus("running", "Running");
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        socket.send(JSON.stringify({ type: "start_run", topic }));
+      };
+
+      socket.onmessage = (rawEvent) => {
+        const data = JSON.parse(rawEvent.data);
+        const arrivalTime = Date.now();
+        const delayMs = Math.max(0, arrivalTime - data.timestamp);
+
+        totalDelay += delayMs;
+        delayCount++;
+        lastDelay.textContent = `${delayMs}ms`;
+        avgLatency.textContent = `${(totalDelay / delayCount).toFixed(1)}ms`;
+
+        // Handle streaming tokens
+        if (data.type === "llm_token") {
+          tokens++;
+          tokenCount.textContent = tokens;
+
+          if (currentAgent !== data.agentId) {
+            currentAgent = data.agentId;
+            speakerLabel.textContent = `Speaking: ${data.agentId.toUpperCase()}`;
+          }
+
+          streamBox.textContent += data.text;
+          streamBox.scrollTop = streamBox.scrollHeight;
+          return;
+        }
+
+        // Handle all other events
+        nonTokenEvents++;
+        eventCount.textContent = nonTokenEvents;
+        runIdLabel.textContent = `runId: ${data.runId}`;
+
+        const li = document.createElement("li");
+        li.className = "event-item";
+
+        let badgeClass = `event-badge event-${data.type}`;
+        if (data.type === "run_finished" && data.status === "failed") {
+          badgeClass += " failed";
+        }
+
+        let bodyText = "";
+        if (data.type === "run_started") {
+          bodyText = `Task: "${data.task}"\nAgents: [${data.agentIds.join(", ")}]`;
+        } else if (data.type === "agent_started") {
+          bodyText = `Agent started: ${data.agentId.toUpperCase()}`;
+          streamBox.textContent += `\n\n--- [${data.agentId.toUpperCase()}] ---\n`;
+        } else if (data.type === "message_sent") {
+          bodyText = `From: ${data.fromAgentId.toUpperCase()} → To: ${data.toAgentId.toUpperCase()}\n"${data.content}"`;
+        } else if (data.type === "llm_response") {
+          bodyText = `Tokens: ${data.promptTokens} prompt + ${data.outputTokens} output | Duration: ${data.durationMs}ms`;
+        } else if (data.type === "agent_finished") {
+          bodyText = `Finished: ${data.agentId.toUpperCase()}\nResult: "${data.result}"`;
+        } else if (data.type === "run_finished") {
+          bodyText = `Status: ${data.status.toUpperCase()}`;
+        }
+
+        li.innerHTML = `
+          <div class="event-header">
+            <span class="${badgeClass}">${data.type}</span>
+            <span class="event-meta">delay: ${delayMs}ms · ${new Date(data.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <div class="event-body">${bodyText}</div>
+        `;
+
+        eventsList.appendChild(li);
+        eventsList.scrollTop = eventsList.scrollHeight;
+
+        if (data.type === "run_finished") {
+          startBtn.disabled = false;
+          speakerLabel.textContent = "";
+          if (data.status === "completed") {
+            setStatus("completed", "Completed");
+          } else {
+            setStatus("failed", "Failed");
+          }
+          socket.close();
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.error("WebSocket error:", err);
+        setStatus("failed", "WS Error");
+        startBtn.disabled = false;
+      };
+
+      socket.onclose = () => {
+        if (statusBadge.textContent === "Running") {
+          setStatus("failed", "Disconnected");
+          startBtn.disabled = false;
+        }
+      };
+    });
+  </script>
+</body>
+</html>

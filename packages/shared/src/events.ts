@@ -36,3 +36,5 @@ export type Agent = {
   model: string; // "qwen3:8b"
   tools: string[]; // names of tools it may call
 };
+
+export type ClientMessage = { type: "start_run"; topic: string };

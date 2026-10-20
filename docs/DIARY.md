@@ -85,3 +85,24 @@ This becomes the raw material for the thesis chapters.
   - **Bug 1 (prefix echoing):** Because opponent turns are formatted as `"Con: ..."` in `user` messages, `Pro` started its Round 2 reply with `"Pro: ..."`, causing `"Pro: Pro: ..."` in the output. Fix: instructed agents not to prefix their name and stripped `^(Pro|Con):\s*` when saving turns.
   - **Bug 2 (role flipping on Round 1):** On the topic `"people must marry"`, `Pro` argued *against* marriage in Round 1 ("Marrying is not a necessity..."). Cause: the system prompt said *"Reply to your opponent's last point"*, so on Turn 1 (with no opponent turn yet) the 8B model treated the topic itself as the opponent's claim and followed its default alignment bias toward personal freedom. In Round 2, after seeing `Con` argue against marriage, `Pro` flipped back to defending marriage, and the `Judge` gave the win to `Con` for being more consistent.
   - **Fix & thesis lesson:** Strengthened system prompts and the initial user message to explicitly remind the agent of its role (`arguing strictly FOR / AGAINST` as a debate exercise). This matches the *role flipping* failure mode from the CAMEL paper and makes a great example of a "planted problem" for the user study in February/March.
+
+## 2026-10-20
+  ### Week 4: Server, Live Events, and WebSocket (`apps/server`)
+  - **What I built:**
+    - Express HTTP server with `/health`, `/echo`, and static file serving (`apps/server`).
+    - Shared event types in `packages/shared/src/events.ts` (`AgentEvent` discriminated union, `ClientMessage`).
+    - `DistributiveOmit` type helper and `makeEvent` factory in `apps/server/src/events.ts` to attach `id`, `runId`, and `timestamp`.
+    - Event-driven debate orchestrator in `apps/server/src/orchestrator/debate.ts` with `runDebate(runId, topic, emit)`.
+    - WebSocket streaming via `ws` on `/ws` pushing JSON-serialized events live to connected clients.
+    - Plain HTML test page in `apps/server/public/index.html` with real-time token streaming box, structured event list, and latency tracking.
+  - **What broke & bugs fixed:**
+    - **`app.listen` vs `server.listen`:** Calling `app.listen()` spun up an isolated HTTP server that bypassed the `server` instance containing the `WebSocketServer` (`wss`). Fixed by switching to `server.listen(PORT, ...)`.
+    - **Module resolution (.js vs .ts):** With Node 24 native TypeScript execution, importing `./orchestrator/debate.js` failed with `ERR_MODULE_NOT_FOUND`. Changed import path to `./orchestrator/debate.ts`.
+    - **Union type flattening:** A naive `Omit<AgentEvent, "id">` collapsed the discriminated union into shared keys only. Solved using `DistributiveOmit<T, K> = T extends unknown ? Omit<T, K> : never`.
+  - **Experiment observations:**
+    - **Two tabs at once:** Debates do not cross-talk or mix up. Each WebSocket client has an isolated socket connection; the server passes a socket-scoped `emit` callback into `runDebate`, keeping events strictly separated per connection.
+    - **Event delay / latency:** Measured `Date.now() - event.timestamp` in the browser. Over local WebSocket, average latency is 1–4 ms per event, confirming WebSocket push has negligible overhead for live agent tracing.
+    - **Ollama mid-run failure:** Stopping Ollama mid-run triggers a fetch rejection that is caught by `try/catch`, immediately emitting `{ type: "run_finished", status: "failed" }`. The browser detects this and highlights the run in red ("Failed"), preventing deceptive "Task Completed" summaries observed in CrewAI.
+    - **Token volume:** One standard debate run generates between 450 and 600 `llm_token` events (~50–80 tokens per turn across Pro × 2, Con × 2, and Judge × 1).
+  - **For the thesis (Why events instead of just saving the final text?):**
+    Saving only the final text treats multi-agent systems as opaque black boxes and loses the entire execution trajectory. An append-only stream of fine-grained events decouples the orchestrator from external consumers: the exact same event stream drives the real-time UI graph, step-by-step post-hoc replay, and quantitative performance metrics without the orchestrator needing any knowledge of the presentation layer. Furthermore, structured events make intermediate errors, latency bottlenecks, and reasoning deviations visible and debuggable.
