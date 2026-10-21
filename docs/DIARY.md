@@ -106,3 +106,27 @@ This becomes the raw material for the thesis chapters.
     - **Token volume:** One standard debate run generates between 450 and 600 `llm_token` events (~50–80 tokens per turn across Pro × 2, Con × 2, and Judge × 1).
   - **For the thesis (Why events instead of just saving the final text?):**
     Saving only the final text treats multi-agent systems as opaque black boxes and loses the entire execution trajectory. An append-only stream of fine-grained events decouples the orchestrator from external consumers: the exact same event stream drives the real-time UI graph, step-by-step post-hoc replay, and quantitative performance metrics without the orchestrator needing any knowledge of the presentation layer. Furthermore, structured events make intermediate errors, latency bottlenecks, and reasoning deviations visible and debuggable.
+
+## 2026-10-21
+  ### Week 5: The Live Graph and Message Log (`apps/web`)
+  - **What I built:**
+    - React + Vite + TypeScript web application in `apps/web` with `@xyflow/react` (React Flow v12) and workspace linking to `@agent-platform/shared`.
+    - Configured Vite WebSocket proxy in `vite.config.ts` (`/ws` → `ws://localhost:3000`).
+    - Implemented pure event reducer `applyEvent(state, event)` in `runState.ts`, computing entire UI state from the event stream (`events.reduce(applyEvent, initialState)`).
+    - Custom React hook `useRun.ts` managing WebSocket streaming and state reduction.
+    - Custom `AgentNode` component (`apps/web/src/components/AgentNode.tsx`) showing agent identity, status badges (`idle`, `thinking`, `done`, `error`), live streaming speech bubble, and token counters.
+    - Split-screen dashboard in `App.tsx`: live conversation graph on the left (~65%) and scrollable `MessageLog` on the right (~35%).
+    - Bidirectional graph-log interaction: hovering or clicking a message in the log highlights the corresponding edge on the graph; clicking an edge in the graph selects the matching message in the log.
+    - 1.5-second persistent edge animation: active message edges stay animated in glowing cyan with moving dashed strokes so fast turns remain easily readable.
+  - **What broke & bugs fixed:**
+    - **Pro agent node disappearing on Round 3:**
+      - *Cause:* Creating a brand-new `nodes` array on every single streamed token without passing `onNodesChange` to `<ReactFlow>` caused React Flow to lose internal node measurement data. When Round 3 began and `liveText` was wiped to empty, the node abruptly collapsed in height; React Flow's layout engine treated the unmeasured node as having invalid dimensions and culled (hid) it from view. In addition, multiple handles lacked unique IDs, causing connection lookup failures.
+      - *Fix:* Switched to React Flow's controlled `useNodesState` with `onNodesChange` and `onEdgesChange`. Existing nodes preserve measurement data while only `node.data` updates. Assigned explicit unique IDs to all handles (`top`, `bottom`, `left`, `right`) with spatial edge routing (`pro` $\leftrightarrow$ `con` horizontally, `judge` vertically) and added a stable minimum height with a `"Thinking…"` placeholder to `AgentNode`.
+    - **Package workspace dependency location:** In `apps/web/package.json`, `"@agent-platform/shared": "*"` was initially placed at the root level instead of inside `"dependencies"`, preventing npm from symlinking the package. Fixed by moving it under `dependencies`.
+    - **CSS fixed viewport constraint:** Default Vite template styles in `index.css` restricted `#root` to a centered `1126px` column. Reset to full viewport (`width: 100%; height: 100%; overflow: hidden`) so the split-screen view fits naturally.
+  - **Things to try (Experimental findings):**
+    - **Run 3 rounds instead of 2 (Graph readability vs Message Density):**
+      - The graph aggregates repeated messages between the same two agents into a single directed edge with an incrementing badge (e.g., `3 msgs`), which prevents the canvas from turning into an unreadable tangle of duplicate lines.
+      - *Thesis takeaway:* The graph excels at revealing structural topology, active participants, and communication density, but it cannot show chronological dialogue or argument nuance on its own. The side-by-side Message Log provides the essential narrative context, proving that a dual-view (graph + structured log) is strictly superior to either view in isolation.
+    - **Laptop half-screen / small viewport:**
+      - In half-screen split-window mode (~600–700px width), the dashboard remains functional because React Flow supports continuous zooming and panning (`Controls` + `fitView`), while the Message Log maintains independent vertical scrolling. Flexbox with `min-width: 0` keeps both panels responsive without horizontal page overflow.
