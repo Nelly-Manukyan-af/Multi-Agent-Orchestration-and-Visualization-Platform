@@ -6,12 +6,23 @@ export type AgentState = {
   status: AgentStatus;
   liveText: string;
   tokens: number;
+  lastResponse?: { tokens: number; durationMs: number };
+};
+
+export type MessageItem = {
+  id: string;
+  from: string;
+  to: string;
+  content: string;
+  timestamp: number;
+  tokens?: number;
+  durationMs?: number;
 };
 
 export type RunState = {
   status: "idle" | "running" | "completed" | "failed" | "stopped";
   agents: Record<string, AgentState>;
-  messages: { from: string; to: string; content: string; timestamp: number }[];
+  messages: MessageItem[];
   activeEdge: { from: string; to: string } | null; // the message being sent right now
 };
 
@@ -78,23 +89,30 @@ export function applyEvent(state: RunState, event: AgentEvent): RunState {
           [event.agentId]: {
             ...current,
             tokens: current.tokens + event.outputTokens,
+            lastResponse: {
+              tokens: event.outputTokens,
+              durationMs: event.durationMs,
+            },
           },
         },
       };
     }
 
     case "message_sent": {
+      const fromAgent = state.agents[event.fromAgentId];
+      const newMessage: MessageItem = {
+        id: event.id,
+        from: event.fromAgentId,
+        to: event.toAgentId,
+        content: event.content,
+        timestamp: event.timestamp,
+        tokens: fromAgent?.lastResponse?.tokens,
+        durationMs: fromAgent?.lastResponse?.durationMs,
+      };
+
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          {
-            from: event.fromAgentId,
-            to: event.toAgentId,
-            content: event.content,
-            timestamp: event.timestamp,
-          },
-        ],
+        messages: [...state.messages, newMessage],
         activeEdge: event.toAgentId === "all" ? null : { from: event.fromAgentId, to: event.toAgentId },
       };
     }

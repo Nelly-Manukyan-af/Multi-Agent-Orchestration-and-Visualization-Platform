@@ -52,7 +52,7 @@ export async function runDebate(
         return messages;
     }
 
-    const ROUNDS = 2;
+    const ROUNDS = 3;
 
     emit(makeEvent(runId, {
         type: "run_started",
