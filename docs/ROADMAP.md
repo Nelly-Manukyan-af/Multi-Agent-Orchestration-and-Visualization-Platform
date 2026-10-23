@@ -60,11 +60,11 @@ Detailed plan: [`docs/week-3.md`](week-3.md).
 **Goal:** move the agents from a terminal script into a server that sends events to a browser.
 Detailed plan: [`docs/week-4.md`](week-4.md).
 
-- [ ] Learn Express basics: routes, JSON bodies, static middleware.
-- [ ] Learn WebSockets with the `ws` library (the server can push messages to the browser at any time).
-- [ ] In `apps/server`, turn the debate into an **orchestrator**: code that runs the agents and emits
+- [x] Learn Express basics: routes, JSON bodies, static middleware.
+- [x] Learn WebSockets with the `ws` library (the server can push messages to the browser at any time).
+- [x] In `apps/server`, turn the debate into an **orchestrator**: code that runs the agents and emits
       typed events (`agent_started`, `llm_token`, `tool_called`, `agent_message`, …) defined in `packages/shared`.
-- [ ] Stream those events to a simple HTML test page and print them there.
+- [x] Stream those events to a simple HTML test page and print them there.
 
 **Done when:** you start a debate from the browser and see the events arrive live.
 
@@ -73,11 +73,11 @@ Detailed plan: [`docs/week-4.md`](week-4.md).
 **Goal:** the core idea of the thesis: watch the agents as a graph.
 Detailed plan: [`docs/week-5.md`](week-5.md).
 
-- [ ] Create `apps/web` with Vite (React + TypeScript).
-- [ ] Do the [React Flow tutorial](https://reactflow.dev/learn).
-- [ ] Draw agents as nodes; highlight the agent that is working right now.
-- [ ] Animate an edge when one agent sends a message to another.
-- [ ] Add a message log panel next to the graph (the "text view" you will compare against in the study).
+- [x] Create `apps/web` with Vite (React + TypeScript).
+- [x] Do the [React Flow tutorial](https://reactflow.dev/learn).
+- [x] Draw agents as nodes; highlight the agent that is working right now.
+- [x] Animate an edge when one agent sends a message to another.
+- [x] Add a message log panel next to the graph (the "text view" you will compare against in the study).
 
 **Done when:** a debate plays out live as a graph in the browser.
 

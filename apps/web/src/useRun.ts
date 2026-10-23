@@ -31,5 +31,12 @@ export function useRun() {
     };
   }
 
-  return { events, state, start };
+  function loadEvents(pastEvents: AgentEvent[]) {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    setEvents(pastEvents);
+  }
+
+  return { events, state, start, loadEvents };
 }

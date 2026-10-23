@@ -13,6 +13,7 @@ import './App.css';
 import { useRun } from './useRun.ts';
 import { AgentNode } from './components/AgentNode.tsx';
 import { MessageLog } from './components/MessageLog.tsx';
+import { PastRuns } from './components/PastRuns.tsx';
 
 const POSITIONS: Record<string, { x: number; y: number }> = {
   pro: { x: 60, y: 50 },
@@ -41,7 +42,8 @@ const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
 
 function App() {
   const [topic, setTopic] = useState("Remote work is better than office work");
-  const { events, state, start } = useRun();
+  const { events, state, start, loadEvents } = useRun();
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
 
   // Controlled React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -87,8 +89,29 @@ function App() {
 
   const handleStart = () => {
     if (!topic.trim()) return;
+    setViewingRunId(null);
     setSelectedMessageId(null);
     start(topic.trim());
+  };
+
+  const handleSelectRun = async (runId: string) => {
+    setViewingRunId(runId);
+    setSelectedMessageId(null);
+    try {
+      const res = await fetch(`http://localhost:3000/runs/${runId}/events`);
+      if (res.ok) {
+        const pastEvents = await res.json();
+        loadEvents(pastEvents);
+      }
+    } catch (err) {
+      console.error("Failed to load past run events:", err);
+    }
+  };
+
+  const handleBackToLive = () => {
+    setViewingRunId(null);
+    setSelectedMessageId(null);
+    loadEvents([]);
   };
 
   // Selected message details for edge highlighting
@@ -212,7 +235,11 @@ function App() {
               Agent Platform · Live Graph & Message Log
             </h1>
             <p style={{ margin: "2px 0 0", color: "#94a3b8", fontSize: "0.8rem" }}>
-              Interactive multi-agent conversation tracing with state reducer
+              {viewingRunId ? (
+                <span style={{ color: "#38bdf8", fontWeight: 600 }}>Viewing Past Run ({viewingRunId.slice(0, 8)}...)</span>
+              ) : (
+                "Interactive multi-agent conversation tracing with state reducer"
+              )}
             </p>
           </div>
           <div style={{ display: "flex", gap: "16px", fontSize: "0.85rem", color: "#94a3b8" }}>
@@ -283,7 +310,7 @@ function App() {
             fitViewOptions={{ padding: 0.25 }}
           >
             <Background color="#334155" gap={20} size={1.5} />
-            <Controls style={{ background: "#1e293b", border: "1px solid #334155", fill: "#f8fafc" }} />
+            <Controls style={{ background: "#1e293b", border: "#334155", fill: "#f8fafc" }} />
           </ReactFlow>
         </div>
 
@@ -296,6 +323,14 @@ function App() {
           onHoverEdge={setHoveredEdge}
         />
       </div>
+
+      {/* Bottom: Past Runs History Panel */}
+      <PastRuns
+        currentViewingRunId={viewingRunId}
+        onSelectRun={handleSelectRun}
+        onBackToLive={handleBackToLive}
+        isLive={state.status === "running"}
+      />
     </div>
   );
 }
