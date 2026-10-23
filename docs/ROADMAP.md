@@ -86,8 +86,8 @@ Detailed plan: [`docs/week-5.md`](week-5.md).
 **Goal:** make runs permanent, and start the thesis chapters.
 Detailed plan: [`docs/week-6.md`](week-6.md).
 
-- [ ] SQLite + Drizzle: save every run and all its events (this makes replay possible later).
-- [ ] A form to create an agent: name, role, instructions (system prompt), model.
+- [x] SQLite + Drizzle: save every run and all its events (this makes replay possible later).
+- [x] A form to create an agent: name, role, instructions (system prompt), model.
 - [ ] Write the **Requirements** chapter (what the platform must do, and for whom).
 - [ ] Write the **Architecture** chapter (server, orchestrator, events, web client; with a diagram).
 

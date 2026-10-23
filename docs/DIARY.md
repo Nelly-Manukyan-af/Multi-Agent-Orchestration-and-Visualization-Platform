@@ -91,7 +91,7 @@ This becomes the raw material for the thesis chapters.
   - **What I built:**
     - Express HTTP server with `/health`, `/echo`, and static file serving (`apps/server`).
     - Shared event types in `packages/shared/src/events.ts` (`AgentEvent` discriminated union, `ClientMessage`).
-    - `DistributiveOmit` type helper and `makeEvent` factory in `apps/server/src/events.ts` to attach `id`, `runId`, and `timestamp`.
+    - `DistributiveOmit` type helper and `makeEvent` factory in `apps/server/src/events.ts` to attach `id`, `runId`, and `timestamp``.
     - Event-driven debate orchestrator in `apps/server/src/orchestrator/debate.ts` with `runDebate(runId, topic, emit)`.
     - WebSocket streaming via `ws` on `/ws` pushing JSON-serialized events live to connected clients.
     - Plain HTML test page in `apps/server/public/index.html` with real-time token streaming box, structured event list, and latency tracking.
@@ -121,8 +121,8 @@ This becomes the raw material for the thesis chapters.
   - **What broke & bugs fixed:**
     - **Pro agent node disappearing on Round 3:**
       - *Cause:* Creating a brand-new `nodes` array on every single streamed token without passing `onNodesChange` to `<ReactFlow>` caused React Flow to lose internal node measurement data. When Round 3 began and `liveText` was wiped to empty, the node abruptly collapsed in height; React Flow's layout engine treated the unmeasured node as having invalid dimensions and culled (hid) it from view. In addition, multiple handles lacked unique IDs, causing connection lookup failures.
-      - *Fix:* Switched to React Flow's controlled `useNodesState` with `onNodesChange` and `onEdgesChange`. Existing nodes preserve measurement data while only `node.data` updates. Assigned explicit unique IDs to all handles (`top`, `bottom`, `left`, `right`) with spatial edge routing (`pro` $\leftrightarrow$ `con` horizontally, `judge` vertically) and added a stable minimum height with a `"Thinking…"` placeholder to `AgentNode`.
-    - **Package workspace dependency location:** In `apps/web/package.json`, `"@agent-platform/shared": "*"` was initially placed at the root level instead of inside `"dependencies"`, preventing npm from symlinking the package. Fixed by moving it under `dependencies`.
+      - *Fix:* Switched to React Flow's controlled `useNodesState` with `onNodesChange` and `onEdgesChange`. Existing nodes preserve measurement data while only `node.data` updates. Assigned explicit unique IDs to all handles (`top`, `bottom`, `left`, `right`) with spatial edge routing (`pro` $\leftrightarrow$ `con` horizontally, `judge` vertically) and added a stable minimum height with a `\"Thinking…\"` placeholder to `AgentNode`.
+    - **Package workspace dependency location:** In `apps/web/package.json`, `\"@agent-platform/shared\": \"*\"` was initially placed at the root level instead of inside `\"dependencies\"`, preventing npm from symlinking the package. Fixed by moving it under `dependencies`.
     - **CSS fixed viewport constraint:** Default Vite template styles in `index.css` restricted `#root` to a centered `1126px` column. Reset to full viewport (`width: 100%; height: 100%; overflow: hidden`) so the split-screen view fits naturally.
   - **Things to try (Experimental findings):**
     - **Run 3 rounds instead of 2 (Graph readability vs Message Density):**
@@ -130,3 +130,26 @@ This becomes the raw material for the thesis chapters.
       - *Thesis takeaway:* The graph excels at revealing structural topology, active participants, and communication density, but it cannot show chronological dialogue or argument nuance on its own. The side-by-side Message Log provides the essential narrative context, proving that a dual-view (graph + structured log) is strictly superior to either view in isolation.
     - **Laptop half-screen / small viewport:**
       - In half-screen split-window mode (~600–700px width), the dashboard remains functional because React Flow supports continuous zooming and panning (`Controls` + `fitView`), while the Message Log maintains independent vertical scrolling. Flexbox with `min-width: 0` keeps both panels responsive without horizontal page overflow.
+
+## 2026-10-23
+  ### Week 6: Storage, Replay, and Agent Customization (SQLite + Drizzle)
+  - **What I built:**
+    - Integrated SQLite via `better-sqlite3` and `drizzle-orm` in `apps/server/src/db`. Defined tables in `schema.ts`: `agents`, `runs`, and `events` with `drizzle-kit push` into local `data.db`.
+    - Implemented run and event persistence in `apps/server/src/index.ts`: every debate automatically inserts a run record and saves every emitted event into the database with an incrementing `seq` sequence number.
+    - Added HTTP REST endpoints: `GET /runs` (past runs list), `GET /runs/:id/events` (ordered run events), `GET /models` (proxies Ollama model tags), and full CRUD for agents (`GET /agents`, `POST /agents`, `PUT /agents/:id`, `DELETE /agents/:id`).
+    - Added server restart orphan recovery: on server boot, any run left in `status: "running"` is marked as `"stopped"` so stalled states never freeze the client.
+    - Built `PastRuns.tsx` component in `apps/web`: displays past runs with status badges and start timestamps. Clicking "View" fetches past events and passes them through `applyEvent` to instantly reconstruct the completed debate graph and message log. Added "← Back to Live Debate" to toggle back.
+    - Built `AgentModal.tsx` library and configuration panel: users can create, edit, and delete custom agents with custom names, system prompts, and Ollama model assignments.
+    - Added dynamic agent selection pickers in `App.tsx` header for Pro, Con, and Judge roles; graph node titles update dynamically to reflect the assigned agents.
+    - Updated `runDebate()` and `chat()` to accept optional custom agents and per-agent model configurations.
+  - **What broke & bugs fixed:**
+    - **CORS omission:** Direct `fetch` calls from Vite (`localhost:5173`) to Express (`localhost:3000`) were blocked. Resolved by enabling `cors()` middleware on the Express server.
+    - **Drizzle Date type mismatch:** `createdAt` was defined as an `integer` timestamp in SQLite schema, but `POST /agents` initially attempted to insert `new Date()`. Standardized on numeric millisecond timestamps (`Date.now()`).
+    - **Hanging HTTP routes:** `POST` and `DELETE` routes originally completed DB operations without returning an HTTP response, causing frontend fetch requests to wait indefinitely. Fixed by returning status codes and JSON payloads (`res.status(201).json(newAgent)`, `res.json({ ok: true })`).
+    - **Unpassed orchestrator argument:** `customAgents` lookup was prepared in the WebSocket handler but omitted from the `runDebate()` call. Added `customAgents` as the 4th argument.
+  - **Decisions & Thesis reflections:**
+    - **The `llm_token` persistence choice:**
+      - *Decision:* Saving all events including `llm_token` into the database.
+      - *Reasoning:* While fine-grained token events increase SQLite file size (~500 rows per run), local storage on modern machines is effectively free for thousands of runs. Saving token events guarantees 100% reproducible re-runs, and directly enables the January scrubber feature (scrubbing forward and backward through token-by-token generation).
+    - **Why SQLite + Drizzle over an external database:**
+      - SQLite keeps the platform 100% zero-configuration and offline. Drizzle provides compile-time type safety while ensuring that if multi-user or cloud deployment is required in future work, the database driver can be switched to PostgreSQL without modifying query logic.
