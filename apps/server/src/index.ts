@@ -1,20 +1,25 @@
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { runDebate } from "./orchestrator/debate.ts";
 import { db } from "./db/index.ts";
 import { runs, events, agents } from "./db/schema.ts";
 import { eq, desc } from "drizzle-orm";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const app = express();
 app.use(cors()); // Allow requests from Vite frontend
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../public")));
+
+// Root API info endpoint
+app.get("/", (_req, res) => {
+    res.json({
+        name: "Agent Platform API",
+        status: "online",
+        endpoints: ["/runs", "/runs/:id/events", "/agents", "/models", "/health"],
+        websocket: "ws://localhost:3000/ws",
+    });
+});
 
 // On server start: mark any orphaned "running" runs as "stopped"
 db.update(runs)

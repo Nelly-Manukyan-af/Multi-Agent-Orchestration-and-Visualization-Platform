@@ -88,8 +88,8 @@ Detailed plan: [`docs/week-6.md`](week-6.md).
 
 - [x] SQLite + Drizzle: save every run and all its events (this makes replay possible later).
 - [x] A form to create an agent: name, role, instructions (system prompt), model.
-- [ ] Write the **Requirements** chapter (what the platform must do, and for whom).
-- [ ] Write the **Architecture** chapter (server, orchestrator, events, web client; with a diagram).
+- [x] Write the **Requirements** chapter (what the platform must do, and for whom).
+- [x] Write the **Architecture** chapter (server, orchestrator, events, web client; with a diagram).
 
 **Done when:** a run is still there after restarting the server, and both chapters have a full draft.
 
