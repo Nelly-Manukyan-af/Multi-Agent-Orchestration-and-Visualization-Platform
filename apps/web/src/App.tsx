@@ -14,6 +14,7 @@ import { useRun } from './useRun.ts';
 import { AgentNode } from './components/AgentNode.tsx';
 import { MessageLog } from './components/MessageLog.tsx';
 import { PastRuns } from './components/PastRuns.tsx';
+import { AgentModal, type AgentRecord } from './components/AgentModal.tsx';
 
 const POSITIONS: Record<string, { x: number; y: number }> = {
   pro: { x: 60, y: 50 },
@@ -21,7 +22,7 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
   judge: { x: 250, y: 280 },
 };
 
-const AGENT_LABELS: Record<string, string> = {
+const DEFAULT_LABELS: Record<string, string> = {
   pro: "Pro Agent",
   con: "Con Agent",
   judge: "Judge",
@@ -32,7 +33,7 @@ const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
   type: "agent",
   position: { ...POSITIONS[id] },
   data: {
-    label: AGENT_LABELS[id] ?? id.toUpperCase(),
+    label: DEFAULT_LABELS[id] ?? id.toUpperCase(),
     agentId: id,
     status: "idle",
     liveText: "",
@@ -45,6 +46,14 @@ function App() {
   const { events, state, start, loadEvents } = useRun();
   const [viewingRunId, setViewingRunId] = useState<string | null>(null);
 
+  // Custom agent configuration & modal state
+  const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
+  const [savedAgents, setSavedAgents] = useState<AgentRecord[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>(["qwen3:8b"]);
+  const [selectedProId, setSelectedProId] = useState<string>("");
+  const [selectedConId, setSelectedConId] = useState<string>("");
+  const [selectedJudgeId, setSelectedJudgeId] = useState<string>("");
+
   // Controlled React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -56,6 +65,43 @@ function App() {
 
   const nodeTypes = useMemo(() => ({ agent: AgentNode }), []);
 
+  // Fetch agents and models on load
+  const loadAgentsAndModels = async () => {
+    try {
+      const [agentsRes, modelsRes] = await Promise.all([
+        fetch("http://localhost:3000/agents"),
+        fetch("http://localhost:3000/models"),
+      ]);
+      if (agentsRes.ok) {
+        const data = await agentsRes.json();
+        setSavedAgents(data);
+      }
+      if (modelsRes.ok) {
+        const data = await modelsRes.json();
+        setAvailableModels(data);
+      }
+    } catch (err) {
+      console.error("Failed to load agents/models:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadAgentsAndModels();
+  }, []);
+
+  // Compute active agent labels based on selection
+  const activeLabels = useMemo(() => {
+    const proAgent = savedAgents.find((a) => a.id === selectedProId);
+    const conAgent = savedAgents.find((a) => a.id === selectedConId);
+    const judgeAgent = savedAgents.find((a) => a.id === selectedJudgeId);
+
+    return {
+      pro: proAgent ? proAgent.name : "Pro Agent",
+      con: conAgent ? conAgent.name : "Con Agent",
+      judge: judgeAgent ? judgeAgent.name : "Judge",
+    };
+  }, [savedAgents, selectedProId, selectedConId, selectedJudgeId]);
+
   // Update node data without blowing away node measurements or positions
   useEffect(() => {
     setNodes((prevNodes) =>
@@ -65,7 +111,7 @@ function App() {
           ...node,
           data: {
             ...node.data,
-            label: AGENT_LABELS[node.id] ?? node.id.toUpperCase(),
+            label: activeLabels[node.id as keyof typeof activeLabels] ?? node.id.toUpperCase(),
             agentId: node.id,
             status: agent?.status ?? "idle",
             liveText: agent?.liveText ?? "",
@@ -74,7 +120,7 @@ function App() {
         };
       })
     );
-  }, [state.agents, setNodes]);
+  }, [state.agents, activeLabels, setNodes]);
 
   // Keep active edge animated for ~1.5s after a message arrives
   useEffect(() => {
@@ -91,7 +137,11 @@ function App() {
     if (!topic.trim()) return;
     setViewingRunId(null);
     setSelectedMessageId(null);
-    start(topic.trim());
+    start(topic.trim(), {
+      proId: selectedProId || undefined,
+      conId: selectedConId || undefined,
+      judgeId: selectedJudgeId || undefined,
+    });
   };
 
   const handleSelectRun = async (runId: string) => {
@@ -147,7 +197,6 @@ function App() {
 
       const isHighlighted = isLiveTransmitting || isHovered || isSelected;
 
-      // Determine proper handles based on spatial relationship
       let sourceHandle = "bottom";
       let targetHandle = "top";
 
@@ -221,7 +270,7 @@ function App() {
     }}>
       {/* Top Header & Controls */}
       <header style={{
-        padding: "14px 24px",
+        padding: "12px 24px",
         background: "#1e293b",
         borderBottom: "1px solid #334155",
         display: "flex",
@@ -242,7 +291,7 @@ function App() {
               )}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "16px", fontSize: "0.85rem", color: "#94a3b8" }}>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "0.85rem", color: "#94a3b8" }}>
             <div>
               Status: <span style={{
                 fontWeight: 700,
@@ -255,10 +304,26 @@ function App() {
             <div>
               Events: <strong style={{ color: "#f8fafc" }}>{events.length}</strong>
             </div>
+            <button
+              onClick={() => setIsAgentModalOpen(true)}
+              style={{
+                background: "#334155",
+                color: "#f8fafc",
+                border: "1px solid #475569",
+                borderRadius: "6px",
+                padding: "6px 12px",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              ⚙ Manage Agents ({savedAgents.length})
+            </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        {/* Debate Topic & Agent Role Pickers */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <input
             type="text"
             value={topic}
@@ -266,15 +331,85 @@ function App() {
             placeholder="Enter debate topic..."
             disabled={state.status === "running"}
             style={{
-              flex: 1,
+              flex: 2,
               background: "#0f172a",
               border: "1px solid #334155",
               color: "#f8fafc",
               padding: "8px 12px",
               borderRadius: "6px",
-              fontSize: "0.9rem"
+              fontSize: "0.85rem"
             }}
           />
+
+          {/* Pro Agent Selection */}
+          <select
+            value={selectedProId}
+            onChange={(e) => setSelectedProId(e.target.value)}
+            disabled={state.status === "running"}
+            style={{
+              flex: 1,
+              background: "#0f172a",
+              border: "1px solid #334155",
+              color: "#93c5fd",
+              padding: "8px 10px",
+              borderRadius: "6px",
+              fontSize: "0.82rem",
+            }}
+          >
+            <option value="">Pro: Default Pro</option>
+            {savedAgents.map((a) => (
+              <option key={a.id} value={a.id}>
+                Pro: {a.name} ({a.model})
+              </option>
+            ))}
+          </select>
+
+          {/* Con Agent Selection */}
+          <select
+            value={selectedConId}
+            onChange={(e) => setSelectedConId(e.target.value)}
+            disabled={state.status === "running"}
+            style={{
+              flex: 1,
+              background: "#0f172a",
+              border: "1px solid #334155",
+              color: "#fca5a5",
+              padding: "8px 10px",
+              borderRadius: "6px",
+              fontSize: "0.82rem",
+            }}
+          >
+            <option value="">Con: Default Con</option>
+            {savedAgents.map((a) => (
+              <option key={a.id} value={a.id}>
+                Con: {a.name} ({a.model})
+              </option>
+            ))}
+          </select>
+
+          {/* Judge Agent Selection */}
+          <select
+            value={selectedJudgeId}
+            onChange={(e) => setSelectedJudgeId(e.target.value)}
+            disabled={state.status === "running"}
+            style={{
+              flex: 1,
+              background: "#0f172a",
+              border: "1px solid #334155",
+              color: "#fef08a",
+              padding: "8px 10px",
+              borderRadius: "6px",
+              fontSize: "0.82rem",
+            }}
+          >
+            <option value="">Judge: Default Judge</option>
+            {savedAgents.map((a) => (
+              <option key={a.id} value={a.id}>
+                Judge: {a.name} ({a.model})
+              </option>
+            ))}
+          </select>
+
           <button
             onClick={handleStart}
             disabled={state.status === "running"}
@@ -286,8 +421,9 @@ function App() {
               borderRadius: "6px",
               padding: "8px 18px",
               cursor: state.status === "running" ? "not-allowed" : "pointer",
-              fontSize: "0.9rem",
-              transition: "opacity 0.2s"
+              fontSize: "0.85rem",
+              transition: "opacity 0.2s",
+              whiteSpace: "nowrap"
             }}
           >
             {state.status === "running" ? "Debate Running..." : "Start Debate"}
@@ -330,6 +466,16 @@ function App() {
         onSelectRun={handleSelectRun}
         onBackToLive={handleBackToLive}
         isLive={state.status === "running"}
+      />
+
+      {/* Custom Agent Management Modal */}
+      <AgentModal
+        isOpen={isAgentModalOpen}
+        onClose={() => setIsAgentModalOpen(false)}
+        agents={savedAgents}
+        models={availableModels}
+        onAgentCreated={loadAgentsAndModels}
+        onAgentDeleted={loadAgentsAndModels}
       />
     </div>
   );

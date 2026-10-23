@@ -2,6 +2,12 @@ import { useState, useMemo, useRef } from "react";
 import type { AgentEvent } from "@agent-platform/shared";
 import { applyEvent, initialState, type RunState } from "./runState.ts";
 
+export interface AgentSelection {
+  proId?: string;
+  conId?: string;
+  judgeId?: string;
+}
+
 export function useRun() {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -11,7 +17,7 @@ export function useRun() {
     return events.reduce(applyEvent, initialState);
   }, [events]);
 
-  function start(topic: string) {
+  function start(topic: string, agents?: AgentSelection) {
     setEvents([]);
     if (wsRef.current) {
       wsRef.current.close();
@@ -22,7 +28,15 @@ export function useRun() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "start_run", topic }));
+      ws.send(
+        JSON.stringify({
+          type: "start_run",
+          topic,
+          proId: agents?.proId || undefined,
+          conId: agents?.conId || undefined,
+          judgeId: agents?.judgeId || undefined,
+        })
+      );
     };
 
     ws.onmessage = (msg) => {

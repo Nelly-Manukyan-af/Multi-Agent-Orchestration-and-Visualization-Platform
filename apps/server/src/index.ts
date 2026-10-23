@@ -73,11 +73,39 @@ app.post("/agents", (req, res) => {
     res.status(201).json(newAgent);
 });
 
+app.put("/agents/:id", (req, res) => {
+    const [updated] = db
+        .update(agents)
+        .set({
+            name: req.body.name,
+            role: req.body.role,
+            model: req.body.model,
+        })
+        .where(eq(agents.id, req.params.id))
+        .returning()
+        .all();
+
+    res.json(updated ?? { ok: true });
+});
+
 app.delete("/agents/:id", (req, res) => {
     db.delete(agents).where(eq(agents.id, req.params.id)).run();
     res.json({ ok: true });
 });
 
+app.get("/models", async (_req, res) => {
+    try {
+        const response = await fetch("http://localhost:11434/api/tags");
+        if (!response.ok) {
+            return res.json(["qwen3:8b"]);
+        }
+        const data = await response.json();
+        const modelNames = data.models?.map((m: { name: string }) => m.name) ?? ["qwen3:8b"];
+        res.json(modelNames);
+    } catch {
+        res.json(["qwen3:8b"]); // fallback if Ollama isn't reachable
+    }
+});
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -87,6 +115,20 @@ wss.on("connection", (socket) => {
             const msg = JSON.parse(raw.toString());
             if (msg.type === "start_run") {
                 const runId = crypto.randomUUID();
+                const customAgents: { pro?: any; con?: any; judge?: any } = {};
+                if (msg.proId) {
+                    const [a] = db.select().from(agents).where(eq(agents.id, msg.proId)).all();
+                    if (a) customAgents.pro = a;
+                }
+                if (msg.conId) {
+                    const [a] = db.select().from(agents).where(eq(agents.id, msg.conId)).all();
+                    if (a) customAgents.con = a;
+                }
+                if (msg.judgeId) {
+                    const [a] = db.select().from(agents).where(eq(agents.id, msg.judgeId)).all();
+                    if (a) customAgents.judge = a;
+                }
+
                 db.insert(runs)
                     .values({
                         id: runId,
@@ -113,7 +155,7 @@ wss.on("connection", (socket) => {
                         if (socket.readyState === WebSocket.OPEN) {
                             socket.send(JSON.stringify(event));
                         }
-                    });
+                    }, customAgents);
 
                     db.update(runs)
                         .set({ status: "completed", finishedAt: Date.now() })

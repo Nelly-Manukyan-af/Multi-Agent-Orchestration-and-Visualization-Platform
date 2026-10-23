@@ -4,4 +4,5 @@ dist/
 *.db
 .DS_Store
 .idea
-.*
+.crewai
+learning/langgraph/.langgraph_api

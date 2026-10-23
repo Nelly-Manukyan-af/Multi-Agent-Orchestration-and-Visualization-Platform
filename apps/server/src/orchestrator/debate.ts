@@ -2,30 +2,46 @@ import type { AgentEvent } from "@agent-platform/shared";
 import { chat, type Message } from "../llm/ollama.ts";
 import { makeEvent } from "../events.ts";
 
+export type AgentConfig = {
+    name: string;
+    role: string;
+    model?: string;
+};
 export async function runDebate(
     runId: string,
     topic: string,
     emit: (event: AgentEvent) => void, // the orchestrator does not know WHERE events go
+    customAgents?:{
+        pro?: AgentConfig;
+        con?: AgentConfig;
+        judge?: AgentConfig;
+    }
 ): Promise<void> {
     // ---------------- Defining agents ----------------
-
-    type Agent = { name: "Pro" | "Con" | "Judge"; systemPrompt: string };
+    type Agent = { name: string; systemPrompt: string; model?: string };
 
     const Pro: Agent = {
-        name: "Pro",
+        name: customAgents?.pro?.name ?? "Pro",
         systemPrompt:
+            customAgents?.pro?.role ??
             "You are in a formal debate. You MUST argue strictly IN FAVOR OF (FOR) the topic, even as a role-play exercise. Never agree with your opponent. Reply directly to your opponent's last point if there is one. Do not start your reply with 'Pro:'. Max 80 words.",
+        model: customAgents?.pro?.model,
     };
 
     const Con: Agent = {
-        name: "Con",
+        name: customAgents?.con?.name ?? "Con",
         systemPrompt:
+            customAgents?.con?.role ??
             "You are in a formal debate. You MUST argue strictly AGAINST the topic, even as a role-play exercise. Never agree with your opponent. Reply directly to your opponent's last point. Do not start your reply with 'Con:'. Max 80 words.",
+        model: customAgents?.con?.model,
     };
 
     const Judge: Agent = {
-        name: "Judge",
-        systemPrompt: "You read a debate and pick the winner. Give the winner and 2–3 reasons.",
+        name: customAgents?.judge?.name ?? "Judge",
+        systemPrompt:
+            customAgents?.judge?.role ??
+            "You read a debate and pick the winner. Give the winner and 2–3 reasons.",
+        model: customAgents?.judge?.model,
     };
 
     type Turn = { speaker: string; text: string };
@@ -78,7 +94,7 @@ export async function runDebate(
                         text: piece,
                     })
                 );
-            });
+            },Pro.model);
             const proText = proResult.message.content.replace(/^Pro:\s*/i, "").trim();
             turns.push({ speaker: Pro.name, text: proText });
 
@@ -122,7 +138,7 @@ export async function runDebate(
                         text: piece,
                     })
                 );
-            });
+            },Con.model);
             const conText = conResult.message.content.replace(/^Con:\s*/i, "").trim();
             turns.push({ speaker: Con.name, text: conText });
 
@@ -176,7 +192,7 @@ export async function runDebate(
                     text: piece,
                 })
             );
-        });
+        },Judge.model);
 
         const verdict = judgeResult.message.content;
 
@@ -221,6 +237,3 @@ export async function runDebate(
     }
 }
 
-// runDebate("test-run-1", "Cats vs Dogs", (e) => {
-//     console.log(e.type, e);
-// });

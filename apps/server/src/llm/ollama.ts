@@ -1,10 +1,8 @@
-// A tiny client for Ollama's chat API, written by hand so you can see
-// exactly what goes over the wire. Docs: https://docs.ollama.com/api/chat
+// Docs: https://docs.ollama.com/api/chat
 
 export const MODEL = process.env.MODEL ?? "qwen3:8b";
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 
-// One message in a conversation. The model only ever sees this list.
 export type Message =
     | { role: "system"; content: string } // instructions: who the agent is
     | { role: "user"; content: string } // the task or question
@@ -15,7 +13,6 @@ export type ToolCall = {
     function: { name: string; arguments: Record<string, unknown> };
 };
 
-// How a tool is described to the model (JSON Schema for its arguments).
 export type ToolDefinition = {
     type: "function";
     function: {
@@ -40,12 +37,13 @@ export async function chat(
     messages: Message[],
     tools?: ToolDefinition[],
     onToken?: (text: string) => void, // called with each new piece of text as it arrives
+    model?:string,
 ): Promise<ChatResult> {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            model: MODEL,
+            model: model || MODEL,
             messages,
             tools,
             stream: true, // send the answer in small pieces, one JSON object per line
