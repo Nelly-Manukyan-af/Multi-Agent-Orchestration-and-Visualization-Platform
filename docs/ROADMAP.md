@@ -36,7 +36,7 @@ Each week below has a **goal**, the **tasks**, and **done when**: how you know y
 - [x] Read the [ReAct paper](https://arxiv.org/abs/2210.03629): abstract, figures, examples.
       ReAct = the model alternates *reasoning* and *acting* (calling tools).
 - [x] Run `npm run agent` and explain every line of the loop in `learning/02-agent-with-tools.ts`.
-- [x] Add a tool yourself: `save_note` (writes to `notes.md`).
+- [x] Add a tool yourself: `save_note` (writes to `../learning/notes.md`).
 - [x] Stream the answer word by word (`stream: true` in `learning/ollama.ts`).
 
 **Done when:** the agent can use several tools in a row, and you see its answer appear live.
