@@ -1,42 +1,38 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
-import type { ModelProvider } from "@agent-platform/shared";
+import { pgTable, text, integer, bigint, serial, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import type { AgentEvent, ModelProvider } from "@agent-platform/shared";
 
-// NOTE: Phase 3 moves this to PostgreSQL and adds users, ownerId on every
-// user-owned table, model_connections and agent_templates/teams (SR-DATA, FR9).
-
-export const agents = sqliteTable("agents", {
+export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  role: text("role").notNull(), // the system prompt
-  model: text("model").notNull(), // "qwen3:8b" etc.
+  role: text("role").notNull(),
+  model: text("model").notNull(),
   provider: text("provider").$type<ModelProvider>().notNull().default("ollama"),
-  createdAt: integer("created_at").notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).notNull(),
 });
 
-// A projection of the Run's events (FR7.1): written on run_started and run_finished.
-export const runs = sqliteTable("runs", {
+export const runs = pgTable("runs", {
   id: text("id").primaryKey(),
   teamName: text("team_name").notNull(),
-  pattern: text("pattern").notNull(), // sequential | manager_workers | group_discussion
+  pattern: text("pattern").notNull(),
   task: text("task").notNull(),
-  status: text("status").notNull(), // running | completed | stopped | failed | loop_detected | turn_limit_reached
-  startedAt: integer("started_at").notNull(),
-  finishedAt: integer("finished_at"),
+  status: text("status").notNull(),
+  startedAt: bigint("started_at", { mode: "number" }).notNull(),
+  finishedAt: bigint("finished_at", { mode: "number" }),
   totalTokens: integer("total_tokens").notNull().default(0),
-  durationMs: integer("duration_ms"),
+  durationMs: bigint("duration_ms", { mode: "number" }),
 });
 
-export const events = sqliteTable(
+export const events = pgTable(
   "events",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     runId: text("run_id")
       .notNull()
       .references(() => runs.id, { onDelete: "cascade" }),
-    seq: integer("seq").notNull(), // 1, 2, 3 ... order within this run
+    seq: integer("seq").notNull(),
     type: text("type").notNull(),
-    payload: text("payload").notNull(), // JSON of the whole event
-    timestamp: integer("timestamp").notNull(),
+    payload: jsonb("payload").$type<AgentEvent>().notNull(),
+    timestamp: bigint("timestamp", { mode: "number" }).notNull(),
   },
-  (t) => [uniqueIndex("events_run_seq").on(t.runId, t.seq)], // NFR4
+  (t) => [uniqueIndex("events_run_seq").on(t.runId, t.seq)],
 );

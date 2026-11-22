@@ -1,21 +1,24 @@
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { Pool } from "pg";
 import * as schema from "./schema.ts";
 
-const dbPath = process.env.DATABASE_PATH ?? fileURLToPath(new URL("../../data.db", import.meta.url));
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-const agentColumns = sqlite.pragma("table_info(agents)") as { name: string }[];
-if (agentColumns.length > 0 && !agentColumns.some((column) => column.name === "provider")) {
-  sqlite.transaction(() => {
-    sqlite.exec("ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'ollama'");
-    sqlite.exec("UPDATE agents SET provider = 'gemini' WHERE model LIKE 'gemini-%'");
-  })();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString?.trim()) {
+  throw new Error("DATABASE_URL is required");
 }
-export const db = drizzle(sqlite, { schema });
 
-export function closeDatabase(): void {
-  sqlite.close();
+export const pool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });
+pool.on("error", (error) => console.error("Database connection failed:", error.message));
+export const db = drizzle(pool, { schema });
+
+export async function migrateDatabase(): Promise<void> {
+  await migrate(db, {
+    migrationsFolder: fileURLToPath(new URL("../../drizzle/", import.meta.url)),
+  });
+}
+
+export async function closeDatabase(): Promise<void> {
+  await pool.end();
 }

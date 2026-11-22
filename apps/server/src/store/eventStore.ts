@@ -1,144 +1,163 @@
-// The one append path (PROJECT.md §6.1 #8, #9).
-// append(): (1) assign the next seq, (2) write to the database, (3) broadcast.
-
-import { asc, eq, gt, and, max } from "drizzle-orm";
+import { asc, eq, gt, and, max, lte } from "drizzle-orm";
 import { applyEvent, initialState, type AgentEvent, type NewEvent, type RunState } from "@agent-platform/shared";
 import { db } from "../db/index.ts";
 import { events, runs } from "../db/schema.ts";
 
-type Listener = (event: AgentEvent) => void;
+export class PersistenceError extends Error {}
 
-const TOKEN_FLUSH_MS = 50;
+type RunLog = {
+  tail: Promise<unknown>;
+  state?: RunState;
+  nextSeq?: number;
+  pending: AgentEvent[];
+  timer?: ReturnType<typeof setTimeout>;
+  failure?: PersistenceError;
+};
 
-const nextSeqByRun = new Map<string, number>();
-const stateByRun = new Map<string, RunState>(); // server-side projection of runs in progress
-const pendingTokens: AgentEvent[] = [];
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-let flushFailed = false;
-let listener: Listener = () => {};
+const logs = new Map<string, RunLog>();
+let listener: (event: AgentEvent) => void = () => {};
+let failureListener: (runId: string, error: PersistenceError) => void = () => {};
 
-/** The WebSocket hub registers here to receive every stored event. */
-export function onAppend(fn: Listener): void {
-  listener = fn;
+export function onAppend(callback: typeof listener): void {
+  listener = callback;
 }
 
-export function append(runId: string, partial: NewEvent): AgentEvent {
-  if (flushFailed || partial.type !== "llm_token") flushTokens();
-  const seq = nextSeq(runId);
-  const event = { ...partial, runId, seq, timestamp: Date.now() } as AgentEvent;
+export function onPersistenceError(callback: typeof failureListener): void {
+  failureListener = callback;
+}
 
-  if (event.type === "llm_token") {
-    pendingTokens.push(event);
-    flushTimer ??= setTimeout(() => {
-      try {
-        flushTokens();
-      } catch (error) {
-        console.error("Token persistence failed:", error);
-      }
-    }, TOKEN_FLUSH_MS);
-  } else {
-    try {
-      write(event);
-    } catch (error) {
-      nextSeqByRun.set(runId, seq);
-      throw error;
+function enqueue<Result>(runId: string, operation: (log: RunLog) => Promise<Result>): Promise<Result> {
+  let log = logs.get(runId);
+  if (!log) {
+    log = { tail: Promise.resolve(), pending: [] };
+    logs.set(runId, log);
+  }
+  const current = log;
+  const result = current.tail.then(() => operation(current));
+  current.tail = result.catch(() => {});
+  return result;
+}
+
+export function append(runId: string, partial: NewEvent): Promise<AgentEvent> {
+  return enqueue(runId, async (log) => {
+    if (log.failure && partial.type === "llm_token") throw log.failure;
+    if (partial.type !== "llm_token") await flushPending(runId, log);
+    log.state ??= await readState(runId);
+    log.nextSeq ??= (await readLastSeq(runId)) + 1;
+    const event = { ...partial, runId, seq: log.nextSeq, timestamp: Date.now() } as AgentEvent;
+    if (event.type === "llm_token") {
+      log.pending.push(event);
+      log.nextSeq++;
+      log.timer ??= setTimeout(() => {
+        log.timer = undefined;
+        void enqueue(runId, (current) => flushPending(runId, current))
+          .catch((error) => console.error(`Run ${runId} token persistence failed:`, error));
+      }, 50);
+      if (log.pending.length >= 100) await flushPending(runId, log);
+    } else {
+      await commit(runId, log, [event]);
+      log.nextSeq++;
+      if (event.type === "run_finished") logs.delete(runId);
     }
-    publish(event);
-  }
-
-  return event;
-}
-
-function publish(event: AgentEvent): void {
-  const runId = event.runId;
-  stateByRun.set(runId, applyEvent(stateByRun.get(runId) ?? initialState, event));
-  if (event.type === "run_finished") {
-    nextSeqByRun.delete(runId);
-    stateByRun.delete(runId);
-  }
-
-  listener(event);
-}
-
-/** Current projected state of a run (in progress), rebuilt from the log if needed. */
-export function getState(runId: string): RunState {
-  const cached = stateByRun.get(runId);
-  if (cached) return cached;
-  const state = loadEvents(runId).reduce(applyEvent, initialState);
-  stateByRun.set(runId, state);
-  return state;
-}
-
-export function flushTokens(): void {
-  if (flushTimer) {
-    clearTimeout(flushTimer);
-    flushTimer = null;
-  }
-  if (pendingTokens.length === 0) return;
-  try {
-    db.transaction((tx) => {
-      for (const event of pendingTokens) tx.insert(events).values(toRow(event)).run();
-    });
-  } catch (error) {
-    flushFailed = true;
-    throw error;
-  }
-  flushFailed = false;
-  const batch = pendingTokens.splice(0);
-  for (const event of batch) publish(event);
-}
-
-export function loadEvents(runId: string, afterSeq = 0): AgentEvent[] {
-  flushTokens();
-  return db
-    .select()
-    .from(events)
-    .where(and(eq(events.runId, runId), gt(events.seq, afterSeq)))
-    .orderBy(asc(events.seq))
-    .all()
-    .map((row) => JSON.parse(row.payload) as AgentEvent);
-}
-
-function nextSeq(runId: string): number {
-  let seq = nextSeqByRun.get(runId);
-  if (seq === undefined) {
-    const [row] = db.select({ maxSeq: max(events.seq) }).from(events).where(eq(events.runId, runId)).all();
-    seq = (row?.maxSeq ?? 0) + 1;
-  }
-  nextSeqByRun.set(runId, seq + 1);
-  return seq;
-}
-
-function write(event: AgentEvent): void {
-  db.transaction((tx) => {
-    // The runs record is a projection of the log (FR7.1).
-    if (event.type === "run_started") {
-      tx.insert(runs)
-        .values({
-          id: event.runId,
-          teamName: event.teamName,
-          pattern: event.pattern,
-          task: event.task,
-          status: "running",
-          startedAt: event.timestamp,
-        })
-        .run();
-    }
-    tx.insert(events).values(toRow(event)).run();
-    if (event.type === "run_finished") {
-      tx.update(runs)
-        .set({
-          status: event.status,
-          finishedAt: event.timestamp,
-          totalTokens: event.totals.promptTokens + event.totals.completionTokens,
-          durationMs: event.totals.durationMs,
-        })
-        .where(eq(runs.id, event.runId))
-        .run();
-    }
+    return event;
   });
 }
 
-function toRow(e: AgentEvent) {
-  return { runId: e.runId, seq: e.seq, type: e.type, payload: JSON.stringify(e), timestamp: e.timestamp };
+export function getState(runId: string): Promise<RunState> {
+  return enqueue(runId, async (log) => {
+    await flushPending(runId, log);
+    log.state ??= await readState(runId);
+    return log.state;
+  });
+}
+
+export async function flushTokens(runId?: string): Promise<void> {
+  const ids = runId ? (logs.has(runId) ? [runId] : []) : [...logs.keys()];
+  const results = await Promise.allSettled(ids.map((id) => enqueue(id, (log) => flushPending(id, log))));
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
+}
+
+async function flushPending(runId: string, log: RunLog): Promise<void> {
+  if (log.timer) clearTimeout(log.timer);
+  log.timer = undefined;
+  if (log.pending.length === 0) return;
+  const batch = log.pending.slice();
+  await commit(runId, log, batch);
+  log.pending.splice(0, batch.length);
+}
+
+async function commit(runId: string, log: RunLog, batch: AgentEvent[]): Promise<void> {
+  try {
+    await db.transaction(async (transaction) => {
+      for (const event of batch) {
+        if (event.type === "run_started") {
+          await transaction.insert(runs).values({
+            id: runId, teamName: event.teamName, pattern: event.pattern,
+            task: event.task, status: "running", startedAt: event.timestamp,
+          });
+        }
+        await transaction.insert(events).values({
+          runId, seq: event.seq, type: event.type, payload: event, timestamp: event.timestamp,
+        });
+        if (event.type === "run_finished") {
+          await transaction.update(runs).set({
+            status: event.status,
+            finishedAt: event.timestamp,
+            totalTokens: event.totals.promptTokens + event.totals.completionTokens,
+            durationMs: event.totals.durationMs,
+          }).where(eq(runs.id, runId));
+        }
+      }
+    });
+  } catch (cause) {
+    const error = new PersistenceError("Unable to persist run events", { cause });
+    log.failure = error;
+    failureListener(runId, error);
+    throw error;
+  }
+  for (const event of batch) {
+    log.state = applyEvent(log.state ?? initialState, event);
+    listener(event);
+  }
+}
+
+async function readLastSeq(runId: string): Promise<number> {
+  const [row] = await db.select({ seq: max(events.seq) }).from(events).where(eq(events.runId, runId));
+  return Number(row?.seq ?? 0);
+}
+
+export async function getLastSeq(runId: string): Promise<number> {
+  await flushTokens(runId);
+  return readLastSeq(runId);
+}
+
+export async function loadEventPage(runId: string, afterSeq = 0, throughSeq?: number): Promise<AgentEvent[]> {
+  const rows = await db.select({ payload: events.payload }).from(events)
+    .where(and(eq(events.runId, runId), gt(events.seq, afterSeq),
+      throughSeq === undefined ? undefined : lte(events.seq, throughSeq)))
+    .orderBy(asc(events.seq)).limit(500);
+  return rows.map((row) => row.payload);
+}
+
+export async function loadEvents(runId: string, afterSeq = 0): Promise<AgentEvent[]> {
+  const throughSeq = await getLastSeq(runId);
+  const result: AgentEvent[] = [];
+  let cursor = afterSeq;
+  while (cursor < throughSeq) {
+    const page = await loadEventPage(runId, cursor, throughSeq);
+    if (page.length === 0) break;
+    result.push(...page);
+    cursor = page.at(-1)!.seq;
+  }
+  return result;
+}
+
+async function readState(runId: string): Promise<RunState> {
+  let state = initialState;
+  while (true) {
+    const page = await loadEventPage(runId, state.lastSeq);
+    if (page.length === 0) return state;
+    state = page.reduce(applyEvent, state);
+  }
 }

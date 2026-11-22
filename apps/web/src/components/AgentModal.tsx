@@ -128,7 +128,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               Agent Library & Team Configuration
             </h2>
             <p className="agent-modal-subtitle">
-              Create and edit custom agents with custom system prompts and models stored in SQLite.
+              Create and edit custom agents with custom system prompts and models.
             </p>
           </div>
           <button
@@ -249,8 +249,8 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                 {submitting
                   ? "Saving..."
                   : editingId
-                  ? "✓ Update Agent in SQLite"
-                  : "+ Save Agent to SQLite"}
+                  ? "✓ Update Agent"
+                  : "+ Save Agent"}
               </button>
             </div>
           </form>

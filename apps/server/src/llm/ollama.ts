@@ -46,7 +46,7 @@ export type ChatOptions = {
 export async function chat(
     messages: Message[],
     tools?: ToolDefinition[],
-    onToken?: (text: string) => void, // called with each new piece of text as it arrives
+    onToken?: (text: string) => void | Promise<void>,
     options: ChatOptions = {},
 ): Promise<ChatResult> {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -76,14 +76,14 @@ export async function chat(
     let buffer = ""; // network chunks can end in the middle of a line, so keep the rest here
     const decoder = new TextDecoder();
 
-    const consumeLine = (line: string) => {
+    const consumeLine = async (line: string) => {
         if (!line.trim()) return;
         const chunk: StreamChunk = JSON.parse(line);
         if (chunk.error) throw new Error(`Ollama stream error: ${chunk.error}`);
         const piece = chunk.message?.content ?? "";
         if (piece) {
             content += piece;
-            onToken?.(piece);
+            await onToken?.(piece);
         }
         if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls);
         if (chunk.done) final = chunk;
@@ -94,9 +94,9 @@ export async function chat(
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? ""; // the last line may be unfinished: wait for the next chunk
 
-        for (const line of lines) consumeLine(line);
+        for (const line of lines) await consumeLine(line);
     }
-    consumeLine(buffer + decoder.decode());
+    await consumeLine(buffer + decoder.decode());
     if (!final) throw new Error("Ollama stream ended before completion");
 
     return {

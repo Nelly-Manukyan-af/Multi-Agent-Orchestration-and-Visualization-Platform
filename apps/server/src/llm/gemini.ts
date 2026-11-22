@@ -9,7 +9,7 @@ type StreamChunk = {
 export async function chat(
   messages: Message[],
   tools: ToolDefinition[] | undefined,
-  onToken: ((text: string) => void) | undefined,
+  onToken: ((text: string) => void | Promise<void>) | undefined,
   options: ChatOptions,
 ): Promise<ChatResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -60,7 +60,7 @@ export async function chat(
     let dataLines: string[] = [];
     const decoder = new TextDecoder();
 
-    const consumeLine = (line: string) => {
+    const consumeLine = async (line: string) => {
       if (line.startsWith("data:")) {
         dataLines.push(line.slice(5).trimStart());
         return;
@@ -82,7 +82,7 @@ export async function chat(
       const piece = choice?.delta?.content;
       if (piece) {
         content += piece;
-        onToken?.(piece);
+        await onToken?.(piece);
       }
       if (choice?.finish_reason) finishReason = choice.finish_reason;
       if (chunk.usage) {
@@ -95,10 +95,10 @@ export async function chat(
       buffer += decoder.decode(bytes, { stream: true });
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() ?? "";
-      for (const line of lines) consumeLine(line);
+      for (const line of lines) await consumeLine(line);
     }
-    consumeLine((buffer + decoder.decode()).replace(/\r$/, ""));
-    consumeLine("");
+    await consumeLine((buffer + decoder.decode()).replace(/\r$/, ""));
+    await consumeLine("");
     if (!done || !finishReason) throw new Error("Gemini stream ended before completion");
     if (finishReason !== "stop" && finishReason !== "length") {
       throw new Error("Gemini ended without a text answer");
@@ -114,6 +114,7 @@ export async function chat(
   } catch (error) {
     if (options.signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : "Gemini request failed";
+    if (error instanceof Error && !message.includes(apiKey)) throw error;
     throw new Error(message.replaceAll(apiKey, "[REDACTED]"));
   }
 }

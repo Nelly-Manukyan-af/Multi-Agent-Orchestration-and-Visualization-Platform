@@ -1,7 +1,9 @@
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   DEFAULT_TURN_LIMIT,
   TURN_LIMIT_MAX,
@@ -10,7 +12,7 @@ import {
   type RunRecord,
   type StartRunRequest,
 } from "@agent-platform/shared";
-import { db, closeDatabase } from "./db/index.ts";
+import { db, closeDatabase, migrateDatabase } from "./db/index.ts";
 import { runs, agents } from "./db/schema.ts";
 import { loadEvents, flushTokens } from "./store/eventStore.ts";
 import { attachHub } from "./store/hub.ts";
@@ -33,36 +35,43 @@ app.use(express.json());
 
 // FR4.7 Orphan recovery: close any run left "running" by a restart or deploy,
 // so its log ends with turn_finished (aborted) and run_finished.
-for (const { id } of db.select({ id: runs.id }).from(runs).where(eq(runs.status, "running")).all()) {
-  closeOpenTurn(id, "aborted");
-  finishRun(id, "stopped", "Server restarted");
+await migrateDatabase();
+for (const { id } of await db.select({ id: runs.id }).from(runs).where(eq(runs.status, "running"))) {
+  await closeOpenTurn(id, "aborted");
+  await finishRun(id, "stopped", "Server restarted");
 }
 
-app.get("/health", (_req, res) => {
-  res.status(shuttingDown ? 503 : 200).json({ ok: !shuttingDown });
+app.get("/health", async (_req, res) => {
+  if (shuttingDown) return res.status(503).json({ ok: false });
+  try {
+    await db.execute(sql`select 1`);
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
 });
 
 // ---------- Runs ----------
 
-app.get("/runs", (_req, res) => {
-  const all = db.select().from(runs).orderBy(desc(runs.startedAt)).all() as RunRecord[];
+app.get("/runs", async (_req, res) => {
+  const all = await db.select().from(runs).orderBy(desc(runs.startedAt)) as RunRecord[];
   res.json(all);
 });
 
-app.get("/runs/:id", (req, res) => {
-  const [run] = db.select().from(runs).where(eq(runs.id, req.params.id)).all();
+app.get("/runs/:id", async (req, res) => {
+  const [run] = await db.select().from(runs).where(eq(runs.id, req.params.id));
   if (!run) return res.status(404).json({ error: "Run not found" });
   res.json(run);
 });
 
-app.get("/runs/:id/events", (req, res) => {
-  const [run] = db.select({ id: runs.id }).from(runs).where(eq(runs.id, req.params.id)).all();
+app.get("/runs/:id/events", async (req, res) => {
+  const [run] = await db.select({ id: runs.id }).from(runs).where(eq(runs.id, req.params.id));
   if (!run) return res.status(404).json({ error: "Run not found" });
-  res.json(loadEvents(run.id));
+  res.json(await loadEvents(run.id));
 });
 
 // Start a run (FR4.1 pre-flight). The client then subscribes over /ws.
-app.post("/runs", (req, res) => {
+app.post("/runs", async (req, res) => {
   if (shuttingDown) return res.set("Connection", "close").status(503).json({ error: "Server shutting down" });
   const body = req.body as StartRunRequest;
   const task = typeof body.task === "string" ? body.task.trim() : "";
@@ -90,7 +99,7 @@ app.post("/runs", (req, res) => {
     ["judge", body.judgeId],
   ] as const) {
     if (!id) continue;
-    const [found] = db.select().from(agents).where(eq(agents.id, id)).all();
+    const [found] = await db.select().from(agents).where(eq(agents.id, id));
     if (!found) return res.status(400).json({ error: `The agent selected for ${slot} no longer exists.` });
     custom[slot] = found;
   }
@@ -100,7 +109,8 @@ app.post("/runs", (req, res) => {
   if (strategy.snapshot.some((agent) => agent.provider === "gemini") && !process.env.GEMINI_API_KEY?.trim()) {
     return res.status(400).json({ error: "Configure GEMINI_API_KEY on the server before using Gemini agents." });
   }
-  startRun(runId, task, turnLimit, strategy);
+  if (shuttingDown) return res.set("Connection", "close").status(503).json({ error: "Server shutting down" });
+  await startRun(runId, task, turnLimit, strategy);
   res.status(201).json({ runId });
 });
 
@@ -112,42 +122,47 @@ app.post("/runs/:id/stop", (req, res) => {
 
 // ---------- Agents (becomes /agent-templates in Phase 3, FR2) ----------
 
-app.get("/agents", (_req, res) => {
-  res.json(db.select().from(agents).orderBy(desc(agents.createdAt)).all());
+app.get("/agents", async (_req, res) => {
+  res.json(await db.select().from(agents).orderBy(desc(agents.createdAt)));
 });
 
-app.post("/agents", (req, res) => {
+app.post("/agents", async (req, res) => {
   const { name, role, model, provider = "ollama" } = req.body ?? {};
   if (typeof name !== "string" || !name.trim() || typeof role !== "string" || !role.trim() || typeof model !== "string" || !model.trim()) {
     return res.status(400).json({ error: "name, role and model must be nonempty strings" });
   }
   if (provider !== "ollama" && provider !== "gemini") return res.status(400).json({ error: "Invalid model provider" });
-  const [created] = db
+  const [created] = await db
     .insert(agents)
     .values({ id: crypto.randomUUID(), name, role, model, provider, createdAt: Date.now() })
-    .returning()
-    .all();
+    .returning();
   res.status(201).json(created);
 });
 
-app.put("/agents/:id", (req, res) => {
+app.put("/agents/:id", async (req, res) => {
   const { name, role, model, provider } = req.body ?? {};
   if (provider !== undefined && provider !== "ollama" && provider !== "gemini") {
     return res.status(400).json({ error: "Invalid model provider" });
   }
-  const [updated] = db.update(agents).set({ name, role, model, provider }).where(eq(agents.id, req.params.id)).returning().all();
+  const [updated] = await db.update(agents).set({ name, role, model, provider }).where(eq(agents.id, req.params.id)).returning();
   if (!updated) return res.status(404).json({ error: "Agent not found" });
   res.json(updated);
 });
 
-app.delete("/agents/:id", (req, res) => {
-  db.delete(agents).where(eq(agents.id, req.params.id)).run();
+app.delete("/agents/:id", async (req, res) => {
+  await db.delete(agents).where(eq(agents.id, req.params.id));
   res.status(204).end();
 });
 
 app.get("/models", async (_req, res) => {
   res.json(await listModels());
 });
+
+if (process.env.STATIC_DIR) {
+  const directory = resolve(process.env.STATIC_DIR);
+  if (!existsSync(resolve(directory, "index.html"))) throw new Error("STATIC_DIR must contain the built frontend");
+  app.use(express.static(directory));
+}
 
 const server = createServer(app);
 const closeHub = attachHub(server);
@@ -164,9 +179,9 @@ async function shutdown(): Promise<void> {
 
   try {
     await stopAllRuns();
-    flushTokens();
+    await flushTokens();
     await Promise.all([closeHub(), httpClosed]);
-    closeDatabase();
+    await closeDatabase();
     clearTimeout(deadline);
     process.exit(0);
   } catch (error) {

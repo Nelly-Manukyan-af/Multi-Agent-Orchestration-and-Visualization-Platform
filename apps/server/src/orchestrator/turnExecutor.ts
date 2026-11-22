@@ -4,9 +4,10 @@
 
 import type { AgentSnapshot, ChatMessage, NewEvent, RetryReason, TurnStatus } from "@agent-platform/shared";
 import { chat, type Message } from "../llm/client.ts";
+import { PersistenceError } from "../store/eventStore.ts";
 
 export type TurnContext = {
-  emit: (event: NewEvent) => void;
+  emit: (event: NewEvent) => Promise<unknown>;
   signal: AbortSignal;
 };
 
@@ -31,7 +32,7 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
   const startedAt = Date.now();
   const settings = { model: agent.model, provider: agent.provider, temperature: agent.temperature, maxTokens: agent.maxTokens };
 
-  emit({ type: "turn_started", turnId, agentId: agent.id, turn: turnNumber, delegationCallId: plan.delegationCallId });
+  await emit({ type: "turn_started", turnId, agentId: agent.id, turn: turnNumber, delegationCallId: plan.delegationCallId });
 
   let messages = plan.messages;
   let attempt = 1;
@@ -40,8 +41,8 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
   let completionTokens = 0;
   let partial = "";
 
-  const finish = (status: TurnStatus, rawOutput: string, truncated = false, error?: string): TurnResult => {
-    emit({
+  const finish = async (status: TurnStatus, rawOutput: string, truncated = false, error?: string): Promise<TurnResult> => {
+    await emit({
       type: "turn_finished",
       turnId,
       status,
@@ -54,23 +55,23 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
     return { turnId, status, error };
   };
 
-  const retry = (reason: RetryReason) => {
+  const retry = async (reason: RetryReason) => {
     retried = true;
     attempt++;
-    emit({ type: "turn_retried", turnId, reason, attempt });
+    await emit({ type: "turn_retried", turnId, reason, attempt });
   };
 
   while (true) {
-    emit({ type: "model_request", turnId, attempt, messages, settings });
+    await emit({ type: "model_request", turnId, attempt, messages, settings });
     partial = "";
 
     try {
       const result = await chat(
         toModelMessages(messages),
         undefined,
-        (text) => {
+        async (text) => {
           partial += text;
-          emit({ type: "llm_token", turnId, text, channel: "content" });
+          await emit({ type: "llm_token", turnId, text, channel: "content" });
         },
         { ...settings, signal },
       );
@@ -81,18 +82,20 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
 
       if (text.trim() === "") {
         if (retried) return finish("error", raw, false, "Empty reply after retry");
-        retry("empty");
+        await retry("empty");
         messages = [...messages, { role: "assistant", content: "" }, { role: "user", content: EMPTY_REPLY_CORRECTION }];
         continue;
       }
 
-      emit({ type: "agent_message", turnId, from: agent.id, to: plan.to, text });
+      await emit({ type: "agent_message", turnId, from: agent.id, to: plan.to, text });
       return finish("ok", raw, result.truncated);
     } catch (err) {
+      if (err instanceof PersistenceError) throw err;
+      if (signal.reason instanceof PersistenceError) throw signal.reason;
       if (signal.aborted) return finish("aborted", partial);
       const message = errorText(err);
       if (retried) return finish("error", partial, false, message);
-      retry("connection");
+      await retry("connection");
       try {
         await sleep(CONNECTION_RETRY_MS, signal);
       } catch {

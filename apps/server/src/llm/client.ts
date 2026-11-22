@@ -29,7 +29,7 @@ export const MODEL = defaultModel(DEFAULT_PROVIDER);
 export function chat(
   messages: Message[],
   tools?: ToolDefinition[],
-  onToken?: (text: string) => void,
+  onToken?: (text: string) => void | Promise<void>,
   options: ChatOptions & { provider?: ModelProvider } = {},
 ): Promise<ChatResult> {
   const provider = options.provider ?? DEFAULT_PROVIDER;

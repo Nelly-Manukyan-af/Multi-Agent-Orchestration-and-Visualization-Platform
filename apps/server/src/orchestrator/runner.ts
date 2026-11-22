@@ -10,7 +10,7 @@ import {
   type Pattern,
   type RunState,
 } from "@agent-platform/shared";
-import { append, getState } from "../store/eventStore.ts";
+import { append, getState, onPersistenceError, PersistenceError } from "../store/eventStore.ts";
 import { executeTurn, type TurnPlan } from "./turnExecutor.ts";
 
 /** A pattern decides only who speaks next and whether the Run is finished. */
@@ -26,16 +26,20 @@ export type PatternStrategy = {
   isFinished(state: RunState): boolean;
 };
 
-const activeRuns = new Map<string, { controller: AbortController; completion: Promise<void> }>();
+const activeRuns = new Map<string, { controller: AbortController; completion: Promise<void>; finishing: boolean }>();
+let acceptingRuns = true;
+
+onPersistenceError((runId, error) => activeRuns.get(runId)?.controller.abort(error));
 
 export function stopRun(runId: string): boolean {
   const run = activeRuns.get(runId);
-  if (!run) return false;
+  if (!run || run.finishing) return false;
   run.controller.abort("Stopped by user");
   return true;
 }
 
 export async function stopAllRuns(): Promise<void> {
+  acceptingRuns = false;
   const running = [...activeRuns.values()];
   for (const run of running) run.controller.abort("Server shutting down");
   const results = await Promise.allSettled(running.map((run) => run.completion));
@@ -43,11 +47,11 @@ export async function stopAllRuns(): Promise<void> {
   if (failure?.status === "rejected") throw failure.reason;
 }
 
-/** Appends run_started synchronously, then runs the Turns in the background. */
-export function startRun(runId: string, task: string, turnLimit: number, strategy: PatternStrategy): void {
+export async function startRun(runId: string, task: string, turnLimit: number, strategy: PatternStrategy): Promise<void> {
+  if (!acceptingRuns) throw new Error("Server shutting down");
   const controller = new AbortController();
 
-  append(runId, {
+  const started = append(runId, {
     type: "run_started",
     snapshot: strategy.snapshot,
     task,
@@ -58,10 +62,11 @@ export function startRun(runId: string, task: string, turnLimit: number, strateg
     rounds: strategy.rounds,
   });
 
-  const completion = execute(runId, turnLimit, strategy, controller.signal)
+  const completion = started.then(() => execute(runId, turnLimit, strategy, controller.signal))
     .finally(() => activeRuns.delete(runId));
-  activeRuns.set(runId, { controller, completion });
+  activeRuns.set(runId, { controller, completion, finishing: false });
   void completion.catch((error) => console.error(`Run ${runId} could not be finalized:`, error));
+  await started;
 }
 
 async function execute(runId: string, turnLimit: number, strategy: PatternStrategy, signal: AbortSignal) {
@@ -71,16 +76,23 @@ async function execute(runId: string, turnLimit: number, strategy: PatternStrate
 
   try {
     while (true) {
-      if (signal.aborted) return finishRun(runId, "stopped", signal.reason, turns);
+      const currentState = await getState(runId);
+      if (signal.aborted) {
+        if (signal.reason instanceof PersistenceError) throw signal.reason;
+        return finishRun(runId, "stopped", signal.reason, turns);
+      }
 
-      const plan = strategy.next(getState(runId));
+      const plan = strategy.next(currentState);
       if (!plan) return finishRun(runId, "failed", "Pattern had no next Turn before its normal end", turns);
 
       turns++;
       const result = await executeTurn({ emit, signal }, plan, turns);
-      const state = getState(runId);
+      const state = await getState(runId);
 
-      if (result.status === "aborted") return finishRun(runId, "stopped", signal.reason, turns);
+      if (signal.aborted || result.status === "aborted") {
+        if (signal.reason instanceof PersistenceError) throw signal.reason;
+        return finishRun(runId, "stopped", signal.reason, turns);
+      }
       if (result.status === "error") {
         return finishRun(runId, "failed", `${plan.agent.name} failed in Turn ${turns}: ${result.error ?? "error"}`, turns);
       }
@@ -100,14 +112,16 @@ async function execute(runId: string, turnLimit: number, strategy: PatternStrate
     }
   } catch (err) {
     console.error(`Run ${runId} crashed:`, err instanceof Error ? err.message : err);
-    closeOpenTurn(runId, "error", "Internal error");
+    await closeOpenTurn(runId, "error", "Internal error");
     return finishRun(runId, "failed", "Internal error", turns);
   }
 }
 
-export function finishRun(runId: string, status: FinalStatus, reason: string, turns?: number): void {
-  const state = getState(runId);
-  append(runId, {
+export async function finishRun(runId: string, status: FinalStatus, reason: string, turns?: number): Promise<void> {
+  const active = activeRuns.get(runId);
+  if (active) active.finishing = true;
+  const state = await getState(runId);
+  await append(runId, {
     type: "run_finished",
     status,
     reason,
@@ -120,10 +134,10 @@ export function finishRun(runId: string, status: FinalStatus, reason: string, tu
 }
 
 /** Closes a Turn left open (crash, server restart) so the log stays well-formed. */
-export function closeOpenTurn(runId: string, status: "aborted" | "error", error?: string): void {
-  const turn = openTurn(getState(runId));
+export async function closeOpenTurn(runId: string, status: "aborted" | "error", error?: string): Promise<void> {
+  const turn = openTurn(await getState(runId));
   if (!turn) return;
-  append(runId, {
+  await append(runId, {
     type: "turn_finished",
     turnId: turn.turnId,
     status,
