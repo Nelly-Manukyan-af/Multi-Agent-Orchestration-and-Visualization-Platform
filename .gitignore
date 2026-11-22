@@ -7,6 +7,9 @@ dist/
 .crewai
 learning/langgraph/.langgraph_api
 .agents
+.codex/
+skills/
+skills-lock.json
 .venv/
 __pycache__/
 *.pyc
