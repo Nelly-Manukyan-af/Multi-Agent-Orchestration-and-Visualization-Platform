@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "test": "node --test --test-concurrency=1 apps/server/test/*.test.mjs",
     "hello": "node learning/01-hello-llm.ts",
     "agent": "node learning/02-agent-with-tools.ts",
     "debate": "node learning/03-debate.ts",

@@ -24,6 +24,7 @@
 **/*.p12
 **/*.pfx
 **/node_modules
+apps/server/test
 **/dist
 **/coverage
 **/*.tsbuildinfo

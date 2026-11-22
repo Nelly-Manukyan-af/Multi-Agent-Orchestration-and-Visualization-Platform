@@ -4,18 +4,6 @@
   font-size: 14px;
 }
 
-/* Dark mode theme for default & input node boxes */
-.react-flow__node-default,
-.react-flow__node-input {
-  background: #1e293b;
-  color: #f8fafc;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 500;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-}
-
 /* Style connection handles (the small dots on node borders) */
 .react-flow__handle {
   width: 8px;

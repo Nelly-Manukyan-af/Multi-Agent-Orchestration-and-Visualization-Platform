@@ -4,7 +4,6 @@ import type { NodeState } from "@agent-platform/shared";
 
 export type AgentNodeData = {
   label: string;
-  agentId: string;
   status: NodeState;
   liveText: string;
   tokens: number;

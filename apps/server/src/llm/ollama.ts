@@ -1,6 +1,6 @@
 // Docs: https://docs.ollama.com/api/chat
 
-export const MODEL = process.env.MODEL ?? "qwen3:8b";
+const MODEL = process.env.MODEL ?? "qwen3:8b";
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 
 export type Message =

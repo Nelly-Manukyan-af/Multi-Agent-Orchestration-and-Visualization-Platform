@@ -24,8 +24,6 @@ export function maxTokensFor(provider: ModelProvider): number {
   return provider === "gemini" ? 4096 : 512;
 }
 
-export const MODEL = defaultModel(DEFAULT_PROVIDER);
-
 export function chat(
   messages: Message[],
   tools?: ToolDefinition[],

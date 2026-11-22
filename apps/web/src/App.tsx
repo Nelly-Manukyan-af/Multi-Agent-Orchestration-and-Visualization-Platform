@@ -49,7 +49,6 @@ const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
   position: { ...POSITIONS[id] },
   data: {
     label: DEFAULT_LABELS[id] ?? id.toUpperCase(),
-    agentId: id,
     status: "idle",
     liveText: "",
     tokens: 0,
@@ -152,7 +151,6 @@ function App() {
           data: {
             ...node.data,
             label,
-            agentId: node.id,
             status: agent?.status ?? "idle",
             liveText: agent?.liveText ?? "",
             tokens: agent?.tokens ?? 0,

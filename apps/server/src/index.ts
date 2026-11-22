@@ -194,5 +194,6 @@ process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());
 
 server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+  const address = server.address();
+  console.log(`Server listening on http://localhost:${typeof address === "object" && address ? address.port : PORT}`);
 });
