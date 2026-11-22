@@ -12,7 +12,7 @@
 !packages/shared/
 !packages/shared/**
 
-# Never send local configuration, secrets, generated files, or local databases.
+# Exclude local configuration, secrets and generated files from allowed directories.
 **/.env*
 **/.npmrc
 **/.aws
@@ -28,12 +28,6 @@ apps/server/test
 **/dist
 **/coverage
 **/*.tsbuildinfo
-**/*.db
-**/*.db-*
-**/*.sqlite
-**/*.sqlite-*
-**/*.sqlite3
-**/*.sqlite3-*
 **/.git
 **/.gitignore
 **/.agents
@@ -42,9 +36,4 @@ apps/server/test
 **/docs
 **/reports
 **/*.md
-**/*.py
-**/*.pyc
-**/__pycache__
-**/.venv
-**/venv
 **/.DS_Store
