@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './App.css';
-import type { AgentRecord, AgentSelection } from '@agent-platform/shared';
+import type { AgentRecord, AgentSelection, ModelOption } from '@agent-platform/shared';
 import { minTurnLimit as minTurnLimitFor, DEFAULT_TURN_LIMIT } from '@agent-platform/shared';
 import { STATUS_COLOR } from './status.ts';
 import { API_BASE } from './api.ts';
@@ -77,7 +77,7 @@ function App() {
   // Custom agent configuration & modal state
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [savedAgents, setSavedAgents] = useState<AgentRecord[]>([]);
-  const [availableModels, setAvailableModels] = useState<string[]>(["qwen3:8b"]);
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<AgentSelection>({
     proId: "",
     conId: "",
@@ -353,7 +353,7 @@ function App() {
               </option>
               {savedAgents.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {roleLabel}: {a.name} ({a.model})
+                  {roleLabel}: {a.name} ({a.provider === "gemini" ? "Gemini" : "Ollama"} · {a.model})
                 </option>
               ))}
             </select>

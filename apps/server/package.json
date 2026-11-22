@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.ts"
+    "dev": "node --env-file-if-exists=../../.env --watch src/index.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

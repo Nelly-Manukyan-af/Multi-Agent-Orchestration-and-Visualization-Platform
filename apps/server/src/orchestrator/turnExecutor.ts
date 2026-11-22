@@ -3,7 +3,7 @@
 // speaks next and whether the Run is finished.
 
 import type { AgentSnapshot, ChatMessage, NewEvent, RetryReason, TurnStatus } from "@agent-platform/shared";
-import { chat, type Message } from "../llm/ollama.ts";
+import { chat, type Message } from "../llm/client.ts";
 
 export type TurnContext = {
   emit: (event: NewEvent) => void;
@@ -29,7 +29,7 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
   const { agent } = plan;
   const turnId = crypto.randomUUID();
   const startedAt = Date.now();
-  const settings = { model: agent.model, temperature: agent.temperature, maxTokens: agent.maxTokens };
+  const settings = { model: agent.model, provider: agent.provider, temperature: agent.temperature, maxTokens: agent.maxTokens };
 
   emit({ type: "turn_started", turnId, agentId: agent.id, turn: turnNumber, delegationCallId: plan.delegationCallId });
 
@@ -72,7 +72,7 @@ export async function executeTurn(ctx: TurnContext, plan: TurnPlan, turnNumber: 
           partial += text;
           emit({ type: "llm_token", turnId, text, channel: "content" });
         },
-        { model: agent.model, temperature: agent.temperature, maxTokens: agent.maxTokens, signal },
+        { ...settings, signal },
       );
       promptTokens += result.promptTokens;
       completionTokens += result.outputTokens;

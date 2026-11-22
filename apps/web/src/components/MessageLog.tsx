@@ -27,6 +27,32 @@ export const MessageLog: React.FC<MessageLogProps> = ({
   onSelectMessage,
   onHoverEdge,
 }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const followRef = React.useRef(true);
+  const entries: ({ message: MessageItem } | { preview: TurnState })[] = messages.map(
+    (message) => ({ message }),
+  );
+
+  for (const turn of Object.values(turns).sort((a, b) => a.turn - b.turn)) {
+    if (
+      turn.message !== null ||
+      messages.some((message) => message.turnId === turn.turnId) ||
+      (turn.status !== "running" &&
+        !((turn.status === "aborted" || turn.status === "error") && (turn.output || turn.rawOutput)))
+    ) continue;
+
+    const nextIndex = entries.findIndex((entry) => {
+      const nextTurn = "preview" in entry ? entry.preview : turns[entry.message.turnId];
+      return nextTurn && nextTurn.turn > turn.turn;
+    });
+    entries.splice(nextIndex === -1 ? entries.length : nextIndex, 0, { preview: turn });
+  }
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (container && followRef.current) container.scrollTop = container.scrollHeight;
+  }, [messages, turns]);
+
   return (
     <aside
       style={{
@@ -71,8 +97,14 @@ export const MessageLog: React.FC<MessageLogProps> = ({
       </div>
 
       <div
+        ref={scrollRef}
+        onScroll={(event) => {
+          const container = event.currentTarget;
+          followRef.current = container.scrollHeight - container.scrollTop - container.clientHeight <= 48;
+        }}
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           padding: "16px",
           display: "flex",
@@ -80,7 +112,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({
           gap: "12px",
         }}
       >
-        {messages.length === 0 ? (
+        {entries.length === 0 ? (
           <div
             style={{
               padding: "40px 16px",
@@ -93,7 +125,68 @@ export const MessageLog: React.FC<MessageLogProps> = ({
             Messages will appear here live as agents debate and communicate.
           </div>
         ) : (
-          messages.map((msg, index) => {
+          entries.map((entry, index) => {
+            if ("preview" in entry) {
+              const turn = entry.preview;
+              const interrupted = turn.status !== "running";
+              const text = turn.output || (interrupted ? turn.rawOutput : "") || "";
+              const status = interrupted
+                ? `${turn.status === "aborted" ? "Aborted" : "Error"} · Partial output · Not delivered`
+                : turn.output
+                ? "Generating…"
+                : turn.retries.length > 0 && !turn.reasoning
+                ? "Retrying…"
+                : "Thinking…";
+              const color = AGENT_COLORS[turn.agentId] ?? { bg: "#334155", text: "#fff" };
+
+              return (
+                <div
+                  key={`preview-${turn.turnId}`}
+                  style={{
+                    flexShrink: 0,
+                    background: "#0f172a",
+                    border: `1px dashed ${interrupted ? "#b45309" : "#0284c7"}`,
+                    borderRadius: "8px",
+                    padding: "12px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      background: color.bg,
+                      color: color.text,
+                    }}
+                  >
+                    {(agentNames[turn.agentId] ?? turn.agentId).toUpperCase()}
+                  </span>
+                  <div
+                    role="status"
+                    style={{ marginTop: "8px", fontSize: "0.75rem", color: interrupted ? "#fbbf24" : "#38bdf8" }}
+                  >
+                    {status}
+                  </div>
+                  {text && (
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        fontSize: "0.85rem",
+                        color: "#cbd5e1",
+                        lineHeight: 1.45,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {text}
+                    </p>
+                  )}
+                </div>
+              );
+            }
+
+            const msg = entry.message;
             const id = String(msg.seq);
             const isSelected = selectedMessageId === id;
             const isFinal = msg.to.length === 0; // final output: no recipient, no edge (FR6.2)
@@ -121,6 +214,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({
                 }
                 onMouseLeave={() => onHoverEdge(null)}
                 style={{
+                  flexShrink: 0,
                   background: isSelected ? "#0f172a" : "#0f172a",
                   border: isSelected
                     ? "2px solid #38bdf8"

@@ -6,6 +6,8 @@ export type FinalStatus = "completed" | "stopped" | "failed" | "loop_detected" |
 export type RunStatus = "running" | FinalStatus;
 
 export type Pattern = "sequential" | "manager_workers" | "group_discussion";
+export type ModelProvider = "ollama" | "gemini";
+export type ModelOption = { provider: ModelProvider; model: string };
 
 /** One Team Member as frozen at Run start (FR2.3). Never contains an API key. */
 export type AgentSnapshot = {
@@ -14,6 +16,7 @@ export type AgentSnapshot = {
   role: string; // "Pro", "Con", "Judge", "Manager", ...
   systemPrompt: string;
   model: string;
+  provider?: ModelProvider;
   temperature: number;
   maxTokens: number;
   tools: string[];
@@ -26,7 +29,7 @@ export type ChatMessage =
   | { role: "assistant"; content: string }
   | { role: "tool"; content: string; toolCallId: string };
 
-export type ModelSettings = { model: string; temperature: number; maxTokens: number };
+export type ModelSettings = { model: string; provider?: ModelProvider; temperature: number; maxTokens: number };
 
 export type TokenUsage = { promptTokens: number; completionTokens: number };
 
@@ -89,6 +92,7 @@ export type AgentRecord = {
   name: string;
   role: string; // the system prompt
   model: string;
+  provider: ModelProvider;
   createdAt: number;
 };
 

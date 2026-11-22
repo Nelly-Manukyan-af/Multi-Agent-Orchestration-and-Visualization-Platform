@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import type { ModelProvider } from "@agent-platform/shared";
 
 // NOTE: Phase 3 moves this to PostgreSQL and adds users, ownerId on every
 // user-owned table, model_connections and agent_templates/teams (SR-DATA, FR9).
@@ -8,6 +9,7 @@ export const agents = sqliteTable("agents", {
   name: text("name").notNull(),
   role: text("role").notNull(), // the system prompt
   model: text("model").notNull(), // "qwen3:8b" etc.
+  provider: text("provider").$type<ModelProvider>().notNull().default("ollama"),
   createdAt: integer("created_at").notNull(),
 });
 

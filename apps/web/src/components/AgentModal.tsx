@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { AgentRecord } from "@agent-platform/shared";
+import type { AgentRecord, ModelOption, ModelProvider } from "@agent-platform/shared";
 import { API_BASE } from "../api.ts";
 
 export type { AgentRecord };
@@ -8,7 +8,7 @@ interface AgentModalProps {
   isOpen: boolean;
   onClose: () => void;
   agents: AgentRecord[];
-  models: string[];
+  models: ModelOption[];
   onAgentCreated: () => void;
   onAgentDeleted: () => void;
 }
@@ -24,10 +24,16 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
-  const [model, setModel] = useState(models[0] ?? "qwen3:8b");
+  const [provider, setProvider] = useState<ModelProvider>("ollama");
+  const [model, setModel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const effectiveModel = models.includes(model) ? model : models[0] ?? "";
+  const providerModels = models.filter((option) => option.provider === provider);
+  const savedAgent = agents.find((agent) => agent.id === editingId);
+  if (savedAgent?.provider === provider && !providerModels.some((option) => option.model === savedAgent.model)) {
+    providerModels.push({ provider, model: savedAgent.model });
+  }
+  const effectiveModel = providerModels.some((option) => option.model === model) ? model : providerModels[0]?.model ?? "";
 
   if (!isOpen) return null;
 
@@ -36,6 +42,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
     setName(agent.name);
     setRole(agent.role);
     setModel(agent.model);
+    setProvider(agent.provider);
     setError(null);
   };
 
@@ -43,7 +50,8 @@ export const AgentModal: React.FC<AgentModalProps> = ({
     setEditingId(null);
     setName("");
     setRole("");
-    setModel(models[0] ?? "qwen3:8b");
+    setModel("");
+    setProvider("ollama");
     setError(null);
   };
 
@@ -74,6 +82,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
           name: name.trim(),
           role: role.trim(),
           model: effectiveModel,
+          provider,
         }),
       });
 
@@ -174,20 +183,34 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               </div>
 
               <div className="agent-modal-model-field">
+                <label className="agent-modal-label">Provider</label>
+                <select
+                  aria-label="Provider"
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value as ModelProvider)}
+                  className="agent-modal-input"
+                >
+                  <option value="ollama">Ollama (local)</option>
+                  <option value="gemini">Gemini</option>
+                </select>
                 <label className="agent-modal-label">
-                  Ollama Model
+                  Model
                 </label>
                 <select
+                  aria-label="Model"
                   value={effectiveModel}
                   onChange={(e) => setModel(e.target.value)}
                   className="agent-modal-input"
                 >
-                  {models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                  {providerModels.map((option) => (
+                    <option key={option.model} value={option.model}>
+                      {option.model}
                     </option>
                   ))}
                 </select>
+                {providerModels.length === 0 && (
+                  <p className="agent-modal-empty">No models available for this provider. Check the server configuration.</p>
+                )}
               </div>
             </div>
 
@@ -256,7 +279,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                       <div className="agent-modal-card-heading">
                         <strong className="agent-modal-agent-name">{a.name}</strong>
                         <span className="agent-modal-model-badge">
-                          {a.model}
+                          {a.provider === "gemini" ? "Gemini" : "Ollama"} · {a.model}
                         </span>
                       </div>
                       <p className="agent-modal-role">

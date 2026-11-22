@@ -2,14 +2,14 @@
 // with shared history and stance prompts; the Judge then gives a verdict.
 // Only decides who speaks next and when the Run is finished.
 
-import type { AgentSnapshot, ChatMessage, RunState } from "@agent-platform/shared";
+import type { AgentSnapshot, ChatMessage, ModelProvider, RunState } from "@agent-platform/shared";
 import type { PatternStrategy } from "./runner.ts";
 import type { TurnPlan } from "./turnExecutor.ts";
+import { DEFAULT_PROVIDER, defaultModel, maxTokensFor } from "../llm/client.ts";
 
-export type DebateAgentConfig = { name: string; role: string; model: string };
+export type DebateAgentConfig = { name: string; role: string; model: string; provider?: ModelProvider };
 
 export const DEFAULT_ROUNDS = 3;
-const DEFAULT_MODEL = process.env.MODEL ?? "qwen3:8b";
 
 const DEFAULTS: Record<"pro" | "con" | "judge", { name: string; role: string; systemPrompt: string }> = {
   pro: {
@@ -43,9 +43,10 @@ export function createDebate(
     name: custom[id]?.name ?? DEFAULTS[id].name,
     role: DEFAULTS[id].role,
     systemPrompt: custom[id]?.role ?? DEFAULTS[id].systemPrompt,
-    model: custom[id]?.model ?? DEFAULT_MODEL,
+    provider: custom[id]?.provider ?? DEFAULT_PROVIDER,
+    model: custom[id]?.model ?? defaultModel(DEFAULT_PROVIDER),
     temperature: 0.7,
-    maxTokens: 512,
+    maxTokens: maxTokensFor(custom[id]?.provider ?? DEFAULT_PROVIDER),
     tools: [],
   }));
   const [pro, con, judge] = snapshot;

@@ -16,11 +16,11 @@ import { loadEvents } from "./store/eventStore.ts";
 import { attachHub } from "./store/hub.ts";
 import { closeOpenTurn, finishRun, startRun, stopRun } from "./orchestrator/runner.ts";
 import { createDebate, DEFAULT_ROUNDS, type DebateAgentConfig } from "./orchestrator/groupDiscussion.ts";
+import { listModels } from "./llm/client.ts";
 
 // SR-NET: port and allowed origin come from the environment.
 const PORT = Number(process.env.PORT ?? 3000);
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:5173";
-const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGIN }));
@@ -90,7 +90,11 @@ app.post("/runs", (req, res) => {
   }
 
   const runId = crypto.randomUUID();
-  startRun(runId, task, turnLimit, createDebate(task, custom, rounds));
+  const strategy = createDebate(task, custom, rounds);
+  if (strategy.snapshot.some((agent) => agent.provider === "gemini") && !process.env.GEMINI_API_KEY?.trim()) {
+    return res.status(400).json({ error: "Configure GEMINI_API_KEY on the server before using Gemini agents." });
+  }
+  startRun(runId, task, turnLimit, strategy);
   res.status(201).json({ runId });
 });
 
@@ -107,19 +111,25 @@ app.get("/agents", (_req, res) => {
 });
 
 app.post("/agents", (req, res) => {
-  const { name, role, model } = req.body ?? {};
-  if (!name || !role || !model) return res.status(400).json({ error: "name, role and model are required" });
+  const { name, role, model, provider = "ollama" } = req.body ?? {};
+  if (typeof name !== "string" || !name.trim() || typeof role !== "string" || !role.trim() || typeof model !== "string" || !model.trim()) {
+    return res.status(400).json({ error: "name, role and model must be nonempty strings" });
+  }
+  if (provider !== "ollama" && provider !== "gemini") return res.status(400).json({ error: "Invalid model provider" });
   const [created] = db
     .insert(agents)
-    .values({ id: crypto.randomUUID(), name, role, model, createdAt: Date.now() })
+    .values({ id: crypto.randomUUID(), name, role, model, provider, createdAt: Date.now() })
     .returning()
     .all();
   res.status(201).json(created);
 });
 
 app.put("/agents/:id", (req, res) => {
-  const { name, role, model } = req.body ?? {};
-  const [updated] = db.update(agents).set({ name, role, model }).where(eq(agents.id, req.params.id)).returning().all();
+  const { name, role, model, provider } = req.body ?? {};
+  if (provider !== undefined && provider !== "ollama" && provider !== "gemini") {
+    return res.status(400).json({ error: "Invalid model provider" });
+  }
+  const [updated] = db.update(agents).set({ name, role, model, provider }).where(eq(agents.id, req.params.id)).returning().all();
   if (!updated) return res.status(404).json({ error: "Agent not found" });
   res.json(updated);
 });
@@ -129,16 +139,8 @@ app.delete("/agents/:id", (req, res) => {
   res.status(204).end();
 });
 
-// Lists local Ollama models. Replaced by Model Connections in Phase 3 (FR1).
 app.get("/models", async (_req, res) => {
-  try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`);
-    if (!response.ok) return res.json(["qwen3:8b"]);
-    const data = (await response.json()) as { models?: { name: string }[] };
-    res.json(data.models?.map((m) => m.name) ?? ["qwen3:8b"]);
-  } catch {
-    res.json(["qwen3:8b"]);
-  }
+  res.json(await listModels());
 });
 
 const server = createServer(app);
