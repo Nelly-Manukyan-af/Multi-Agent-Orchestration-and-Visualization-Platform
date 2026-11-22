@@ -10,17 +10,22 @@ import {
   type RunRecord,
   type StartRunRequest,
 } from "@agent-platform/shared";
-import { db } from "./db/index.ts";
+import { db, closeDatabase } from "./db/index.ts";
 import { runs, agents } from "./db/schema.ts";
-import { loadEvents } from "./store/eventStore.ts";
+import { loadEvents, flushTokens } from "./store/eventStore.ts";
 import { attachHub } from "./store/hub.ts";
-import { closeOpenTurn, finishRun, startRun, stopRun } from "./orchestrator/runner.ts";
+import { closeOpenTurn, finishRun, startRun, stopRun, stopAllRuns } from "./orchestrator/runner.ts";
 import { createDebate, DEFAULT_ROUNDS, type DebateAgentConfig } from "./orchestrator/groupDiscussion.ts";
 import { listModels } from "./llm/client.ts";
 
 // SR-NET: port and allowed origin come from the environment.
 const PORT = Number(process.env.PORT ?? 3000);
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:5173";
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10000);
+if (!Number.isSafeInteger(SHUTDOWN_TIMEOUT_MS) || SHUTDOWN_TIMEOUT_MS <= 0 || SHUTDOWN_TIMEOUT_MS > 2147483647) {
+  throw new Error("SHUTDOWN_TIMEOUT_MS must be a positive integer no greater than 2147483647");
+}
+let shuttingDown = false;
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGIN }));
@@ -34,7 +39,7 @@ for (const { id } of db.select({ id: runs.id }).from(runs).where(eq(runs.status,
 }
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.status(shuttingDown ? 503 : 200).json({ ok: !shuttingDown });
 });
 
 // ---------- Runs ----------
@@ -58,6 +63,7 @@ app.get("/runs/:id/events", (req, res) => {
 
 // Start a run (FR4.1 pre-flight). The client then subscribes over /ws.
 app.post("/runs", (req, res) => {
+  if (shuttingDown) return res.set("Connection", "close").status(503).json({ error: "Server shutting down" });
   const body = req.body as StartRunRequest;
   const task = typeof body.task === "string" ? body.task.trim() : "";
   const rounds = body.rounds ?? DEFAULT_ROUNDS;
@@ -144,7 +150,33 @@ app.get("/models", async (_req, res) => {
 });
 
 const server = createServer(app);
-attachHub(server);
+const closeHub = attachHub(server);
+
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log("Server shutting down");
+  const deadline = setTimeout(() => {
+    console.error("Server shutdown timed out");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
+
+  try {
+    await stopAllRuns();
+    flushTokens();
+    await Promise.all([closeHub(), httpClosed]);
+    closeDatabase();
+    clearTimeout(deadline);
+    process.exit(0);
+  } catch (error) {
+    console.error("Server shutdown failed:", error);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
 
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);

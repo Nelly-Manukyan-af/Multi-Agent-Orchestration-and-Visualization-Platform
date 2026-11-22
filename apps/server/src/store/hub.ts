@@ -12,7 +12,7 @@ import { loadEvents, onAppend } from "./eventStore.ts";
 
 const subscribers = new Map<string, Set<WebSocket>>();
 
-export function attachHub(server: Server): void {
+export function attachHub(server: Server): () => Promise<void> {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
   onAppend((event) => {
@@ -47,6 +47,12 @@ export function attachHub(server: Server): void {
     socket.on("close", () => {
       for (const set of subscribers.values()) set.delete(socket);
     });
+  });
+
+  return () => new Promise<void>((resolve, reject) => {
+    wss.close((error) => error ? reject(error) : resolve());
+    for (const socket of wss.clients) socket.close(1001, "Server shutting down");
+    subscribers.clear();
   });
 }
 

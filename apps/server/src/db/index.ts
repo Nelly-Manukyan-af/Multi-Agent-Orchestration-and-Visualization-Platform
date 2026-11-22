@@ -15,3 +15,7 @@ if (agentColumns.length > 0 && !agentColumns.some((column) => column.name === "p
   })();
 }
 export const db = drizzle(sqlite, { schema });
+
+export function closeDatabase(): void {
+  sqlite.close();
+}

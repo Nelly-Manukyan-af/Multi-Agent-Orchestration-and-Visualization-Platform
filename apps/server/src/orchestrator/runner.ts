@@ -26,13 +26,21 @@ export type PatternStrategy = {
   isFinished(state: RunState): boolean;
 };
 
-const activeRuns = new Map<string, AbortController>();
+const activeRuns = new Map<string, { controller: AbortController; completion: Promise<void> }>();
 
 export function stopRun(runId: string): boolean {
-  const controller = activeRuns.get(runId);
-  if (!controller) return false;
-  controller.abort();
+  const run = activeRuns.get(runId);
+  if (!run) return false;
+  run.controller.abort("Stopped by user");
   return true;
+}
+
+export async function stopAllRuns(): Promise<void> {
+  const running = [...activeRuns.values()];
+  for (const run of running) run.controller.abort("Server shutting down");
+  const results = await Promise.allSettled(running.map((run) => run.completion));
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
 }
 
 /** Appends run_started synchronously, then runs the Turns in the background. */
@@ -50,10 +58,10 @@ export function startRun(runId: string, task: string, turnLimit: number, strateg
     rounds: strategy.rounds,
   });
 
-  activeRuns.set(runId, controller);
-  void execute(runId, turnLimit, strategy, controller.signal)
-    .finally(() => activeRuns.delete(runId))
-    .catch((error) => console.error(`Run ${runId} could not be finalized:`, error));
+  const completion = execute(runId, turnLimit, strategy, controller.signal)
+    .finally(() => activeRuns.delete(runId));
+  activeRuns.set(runId, { controller, completion });
+  void completion.catch((error) => console.error(`Run ${runId} could not be finalized:`, error));
 }
 
 async function execute(runId: string, turnLimit: number, strategy: PatternStrategy, signal: AbortSignal) {
@@ -63,7 +71,7 @@ async function execute(runId: string, turnLimit: number, strategy: PatternStrate
 
   try {
     while (true) {
-      if (signal.aborted) return finishRun(runId, "stopped", "Stopped by user", turns);
+      if (signal.aborted) return finishRun(runId, "stopped", signal.reason, turns);
 
       const plan = strategy.next(getState(runId));
       if (!plan) return finishRun(runId, "failed", "Pattern had no next Turn before its normal end", turns);
@@ -72,7 +80,7 @@ async function execute(runId: string, turnLimit: number, strategy: PatternStrate
       const result = await executeTurn({ emit, signal }, plan, turns);
       const state = getState(runId);
 
-      if (result.status === "aborted") return finishRun(runId, "stopped", "Stopped by user", turns);
+      if (result.status === "aborted") return finishRun(runId, "stopped", signal.reason, turns);
       if (result.status === "error") {
         return finishRun(runId, "failed", `${plan.agent.name} failed in Turn ${turns}: ${result.error ?? "error"}`, turns);
       }
