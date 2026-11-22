@@ -105,107 +105,48 @@ export const AgentModal: React.FC<AgentModalProps> = ({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.75)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-        padding: "20px",
-      }}
+      className="agent-modal-overlay"
       onClick={onClose}
     >
       <div
-        style={{
-          background: "#1e293b",
-          border: "1px solid #334155",
-          borderRadius: "12px",
-          width: "100%",
-          maxWidth: "680px",
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
-          color: "#f8fafc",
-          overflow: "hidden",
-        }}
+        className="agent-modal"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "16px 24px",
-            borderBottom: "1px solid #334155",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="agent-modal-header">
           <div>
-            <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
+            <h2 className="agent-modal-title">
               Agent Library & Team Configuration
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#94a3b8" }}>
+            <p className="agent-modal-subtitle">
               Create and edit custom agents with custom system prompts and models stored in SQLite.
             </p>
           </div>
           <button
             onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#94a3b8",
-              fontSize: "1.2rem",
-              cursor: "pointer",
-            }}
+            className="agent-modal-close"
           >
             ✕
           </button>
         </div>
 
         {/* Content Body */}
-        <div
-          style={{
-            padding: "20px 24px",
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "24px",
-          }}
-        >
+        <div className="agent-modal-body">
           {/* Create / Edit Agent Form */}
           <form
             onSubmit={handleSubmit}
-            style={{
-              background: "#0f172a",
-              border: editingId ? "1px solid #0284c7" : "1px solid #334155",
-              borderRadius: "8px",
-              padding: "16px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-              transition: "border-color 0.2s",
-            }}
+            className="agent-modal-form"
+            style={{ border: editingId ? "1px solid #0284c7" : "1px solid #334155" }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "0.95rem", color: "#38bdf8", fontWeight: 600 }}>
+            <div className="agent-modal-form-heading">
+              <h3 className="agent-modal-form-title">
                 {editingId ? "Edit Agent" : "Create New Agent"}
               </h3>
               {editingId && (
                 <button
                   type="button"
                   onClick={handleCancelEdit}
-                  style={{
-                    background: "transparent",
-                    color: "#94a3b8",
-                    border: "none",
-                    fontSize: "0.78rem",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
+                  className="agent-modal-cancel-edit"
                 >
                   Cancel editing
                 </button>
@@ -213,22 +154,14 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </div>
 
             {error && (
-              <div
-                style={{
-                  background: "#7f1d1d",
-                  color: "#fca5a5",
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  fontSize: "0.8rem",
-                }}
-              >
+              <div className="agent-modal-error">
                 {error}
               </div>
             )}
 
-            <div style={{ display: "flex", gap: "12px" }}>
-              <div style={{ flex: 2 }}>
-                <label style={{ display: "block", fontSize: "0.78rem", color: "#94a3b8", marginBottom: "4px" }}>
+            <div className="agent-modal-fields">
+              <div className="agent-modal-name-field">
+                <label className="agent-modal-label">
                   Agent Name
                 </label>
                 <input
@@ -236,34 +169,18 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                   placeholder="e.g. Socratic Debater, Tech Optimist"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "#1e293b",
-                    border: "1px solid #334155",
-                    color: "#f8fafc",
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    fontSize: "0.85rem",
-                  }}
+                  className="agent-modal-input"
                 />
               </div>
 
-              <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "0.78rem", color: "#94a3b8", marginBottom: "4px" }}>
+              <div className="agent-modal-model-field">
+                <label className="agent-modal-label">
                   Ollama Model
                 </label>
                 <select
                   value={effectiveModel}
                   onChange={(e) => setModel(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "#1e293b",
-                    border: "1px solid #334155",
-                    color: "#f8fafc",
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    fontSize: "0.85rem",
-                  }}
+                  className="agent-modal-input"
                 >
                   {models.map((m) => (
                     <option key={m} value={m}>
@@ -275,7 +192,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: "0.78rem", color: "#94a3b8", marginBottom: "4px" }}>
+              <label className="agent-modal-label">
                 Role & Instructions (System Prompt)
               </label>
               <textarea
@@ -283,34 +200,16 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                 rows={3}
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                style={{
-                  width: "100%",
-                  background: "#1e293b",
-                  border: "1px solid #334155",
-                  color: "#f8fafc",
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  fontSize: "0.85rem",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                }}
+                className="agent-modal-textarea"
               />
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <div className="agent-modal-form-actions">
               {editingId && (
                 <button
                   type="button"
                   onClick={handleCancelEdit}
-                  style={{
-                    background: "#334155",
-                    color: "#cbd5e1",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "8px 14px",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                  }}
+                  className="agent-modal-cancel"
                 >
                   Cancel
                 </button>
@@ -318,15 +217,10 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               <button
                 type="submit"
                 disabled={submitting || !effectiveModel}
+                className={`agent-modal-submit${submitting ? " agent-modal-submit-submitting" : ""}`}
                 style={{
                   background: editingId ? "#38bdf8" : "#0284c7",
                   color: editingId ? "#0f172a" : "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "8px 16px",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
                 {submitting
@@ -340,86 +234,46 @@ export const AgentModal: React.FC<AgentModalProps> = ({
 
           {/* Saved Agents List */}
           <div>
-            <h3 style={{ margin: "0 0 10px", fontSize: "0.95rem", color: "#f8fafc", fontWeight: 600 }}>
+            <h3 className="agent-modal-list-title">
               Saved Custom Agents ({agents.length})
             </h3>
             {agents.length === 0 ? (
-              <p style={{ color: "#64748b", fontSize: "0.82rem", margin: 0 }}>
+              <p className="agent-modal-empty">
                 No custom agents created yet. Create one above to pick it for debates!
               </p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div className="agent-modal-list">
                 {agents.map((a) => (
                   <div
                     key={a.id}
+                    className="agent-modal-card"
                     style={{
                       background: editingId === a.id ? "#1e293b" : "#0f172a",
                       border: editingId === a.id ? "1px solid #38bdf8" : "1px solid #334155",
-                      borderRadius: "8px",
-                      padding: "12px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: "12px",
-                      transition: "all 0.15s ease",
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                        <strong style={{ color: "#f8fafc", fontSize: "0.9rem" }}>{a.name}</strong>
-                        <span
-                          style={{
-                            background: "#334155",
-                            color: "#38bdf8",
-                            fontSize: "0.7rem",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontFamily: "monospace",
-                          }}
-                        >
+                    <div className="agent-modal-card-content">
+                      <div className="agent-modal-card-heading">
+                        <strong className="agent-modal-agent-name">{a.name}</strong>
+                        <span className="agent-modal-model-badge">
                           {a.model}
                         </span>
                       </div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.78rem",
-                          color: "#94a3b8",
-                          lineHeight: 1.4,
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
+                      <p className="agent-modal-role">
                         {a.role}
                       </p>
                     </div>
 
-                    <div style={{ display: "flex", gap: "6px" }}>
+                    <div className="agent-modal-card-actions">
                       <button
                         onClick={() => handleStartEdit(a)}
-                        style={{
-                          background: "#334155",
-                          color: "#38bdf8",
-                          border: "none",
-                          borderRadius: "4px",
-                          padding: "4px 10px",
-                          fontSize: "0.72rem",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
+                        className="agent-modal-edit"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(a.id)}
-                        style={{
-                          background: "#7f1d1d",
-                          color: "#fca5a5",
-                          border: "none",
-                          borderRadius: "4px",
-                          padding: "4px 8px",
-                          fontSize: "0.72rem",
-                          cursor: "pointer",
-                        }}
+                        className="agent-modal-delete"
                       >
                         Delete
                       </button>

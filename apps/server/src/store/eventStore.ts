@@ -2,7 +2,7 @@
 // append(): (1) assign the next seq, (2) write to the database, (3) broadcast.
 
 import { asc, eq, gt, and, max } from "drizzle-orm";
-import { applyEvent, initialState, totalUsage, type AgentEvent, type NewEvent, type RunState } from "@agent-platform/shared";
+import { applyEvent, initialState, type AgentEvent, type NewEvent, type RunState } from "@agent-platform/shared";
 import { db } from "../db/index.ts";
 import { events, runs } from "../db/schema.ts";
 
@@ -126,14 +126,12 @@ function write(event: AgentEvent): void {
     }
     tx.insert(events).values(toRow(event)).run();
     if (event.type === "run_finished") {
-      const state = stateByRun.get(event.runId);
-      const usage = state ? totalUsage(state) : { promptTokens: 0, completionTokens: 0 };
       tx.update(runs)
         .set({
           status: event.status,
           finishedAt: event.timestamp,
-          totalTokens: usage.promptTokens + usage.completionTokens,
-          durationMs: state?.startedAt != null ? event.timestamp - state.startedAt : null,
+          totalTokens: event.totals.promptTokens + event.totals.completionTokens,
+          durationMs: event.totals.durationMs,
         })
         .where(eq(runs.id, event.runId))
         .run();

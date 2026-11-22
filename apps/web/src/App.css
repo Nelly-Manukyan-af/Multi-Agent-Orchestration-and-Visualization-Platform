@@ -31,3 +31,436 @@
   stroke-dasharray: 5;
   animation: dashdraw 0.5s linear infinite;
 }
+
+.app-shell {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  color: #f8fafc;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app-shell .app-header {
+  padding: 12px 24px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+}
+
+.app-shell .app-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.app-shell .app-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.app-shell .app-subtitle {
+  margin: 2px 0 0;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.app-shell .app-past-run {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.app-shell .app-summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.app-shell .app-status {
+  font-weight: 700;
+}
+
+.app-shell .app-status-reason {
+  margin-left: 6px;
+  color: #cbd5e1;
+}
+
+.app-shell .app-summary-value {
+  color: #f8fafc;
+}
+
+.app-shell .app-manage-agents {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-shell .app-run-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.app-shell .app-topic {
+  flex: 2;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.app-shell .app-role-picker {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid #334155;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.app-shell .app-turn-limit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.app-shell .app-turn-limit-input {
+  width: 56px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.app-shell .app-stop {
+  background: #ef4444;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.app-shell .app-start {
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.app-shell .app-error {
+  font-size: 0.78rem;
+  color: #fca5a5;
+}
+
+.app-shell .app-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.app-shell .app-graph {
+  flex: 1;
+  height: 100%;
+  position: relative;
+}
+
+.app-shell .app-flow-controls {
+  background: #1e293b;
+  border: #334155;
+  fill: #f8fafc;
+}
+
+.agent-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.agent-modal-overlay .agent-modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
+  overflow: hidden;
+}
+
+.agent-modal-overlay .agent-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agent-modal-overlay .agent-modal-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.agent-modal-overlay .agent-modal-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.agent-modal-overlay .agent-modal-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.agent-modal-overlay .agent-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.agent-modal-overlay .agent-modal-form {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s;
+}
+
+.agent-modal-overlay .agent-modal-form-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agent-modal-overlay .agent-modal-form-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.agent-modal-overlay .agent-modal-cancel-edit {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.agent-modal-overlay .agent-modal-error {
+  background: #7f1d1d;
+  color: #fca5a5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.agent-modal-overlay .agent-modal-fields {
+  display: flex;
+  gap: 12px;
+}
+
+.agent-modal-overlay .agent-modal-name-field {
+  flex: 2;
+}
+
+.agent-modal-overlay .agent-modal-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.agent-modal-overlay .agent-modal-input {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.agent-modal-overlay .agent-modal-model-field {
+  flex: 1;
+}
+
+.agent-modal-overlay .agent-modal-textarea {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.agent-modal-overlay .agent-modal-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-modal-overlay .agent-modal-cancel {
+  background: #334155;
+  color: #cbd5e1;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.agent-modal-overlay .agent-modal-submit {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agent-modal-overlay .agent-modal-list-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.agent-modal-overlay .agent-modal-empty {
+  color: #64748b;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.agent-modal-overlay .agent-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-modal-overlay .agent-modal-card {
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.agent-modal-overlay .agent-modal-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-modal-overlay .agent-modal-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.agent-modal-overlay .agent-modal-agent-name {
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.agent-modal-overlay .agent-modal-model-badge {
+  background: #334155;
+  color: #38bdf8;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.agent-modal-overlay .agent-modal-role {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.agent-modal-overlay .agent-modal-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.agent-modal-overlay .agent-modal-edit {
+  background: #334155;
+  color: #38bdf8;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.agent-modal-overlay .agent-modal-delete {
+  background: #7f1d1d;
+  color: #fca5a5;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.app-shell .app-start:disabled {
+  cursor: not-allowed;
+}
+
+.agent-modal-overlay .agent-modal-submit-submitting {
+  cursor: not-allowed;
+}

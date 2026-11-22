@@ -58,12 +58,11 @@ const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
 }));
 
 const ROUNDS = 3;
+const nodeTypes = { agent: AgentNode };
 
 function App() {
   const [topic, setTopic] = useState("Remote work is better than office work");
-  const { state, isRunning, isStarting, start, stop, replay, returnToLive } = useRun();
-  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
-  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const { state, viewingRunId, isRunning, isStarting, start, stop, replay, returnToLive } = useRun();
   const [turnLimit, setTurnLimit] = useState(DEFAULT_TURN_LIMIT);
   const [startError, setStartError] = useState<string | null>(null);
   const minTurnLimit = minTurnLimitFor("group_discussion", { rounds: ROUNDS, debaters: 2 });
@@ -92,8 +91,6 @@ function App() {
   // Edge animation & interaction states
   const [hoveredEdge, setHoveredEdge] = useState<{ from: string; to: string } | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-
-  const nodeTypes = useMemo(() => ({ agent: AgentNode }), []);
 
   // Fetch agents and models on load
   const loadAgentsAndModels = async () => {
@@ -184,11 +181,10 @@ function App() {
 
   const handleStart = async () => {
     if (preflightError || isStarting || isRunning) return;
-    setViewingRunId(null);
     setSelectedMessageId(null);
     setStartError(null);
     try {
-      const runId = await start({
+      await start({
         task: topic.trim(),
         turnLimit,
         rounds: ROUNDS,
@@ -196,14 +192,12 @@ function App() {
         conId: selectedAgents.conId || undefined,
         judgeId: selectedAgents.judgeId || undefined,
       });
-      if (runId) setLiveRunId(runId);
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleSelectRun = async (runId: string) => {
-    setViewingRunId(runId);
     setSelectedMessageId(null);
     try {
       await replay(runId);
@@ -213,9 +207,8 @@ function App() {
   };
 
   const handleBackToLive = () => {
-    setViewingRunId(null);
     setSelectedMessageId(null);
-    returnToLive(liveRunId);
+    returnToLive();
   };
 
   // Selected message details for edge highlighting
@@ -224,7 +217,7 @@ function App() {
   }, [state.messages, selectedMessageId]);
 
   // Build React Flow edges with explicit sourceHandle and targetHandle
-  const computedEdges: Edge[] = useMemo(() => {
+  useEffect(() => {
     const pairCounts: Record<string, { from: string; to: string; count: number }> = {};
 
     // Each recipient gets one edge; a final answer (to = []) has no edge (FR6.2).
@@ -235,7 +228,7 @@ function App() {
       }
     }
 
-    return Object.entries(pairCounts).map(([pairKey, { from, to, count }]) => {
+    setEdges(Object.entries(pairCounts).map(([pairKey, { from, to, count }]) => {
       const isLiveTransmitting = animatingEdge?.from === from && animatingEdge?.to === to;
       const isHovered = hoveredEdge?.from === from && hoveredEdge?.to === to;
       const isSelected = selectedMessage?.from === from && selectedMessage.to.includes(to);
@@ -276,13 +269,8 @@ function App() {
           transition: "all 0.25s ease",
         },
       };
-    });
-  }, [state.messages, animatingEdge, hoveredEdge, selectedMessage]);
-
-  // Sync computed edges into React Flow state
-  useEffect(() => {
-    setEdges(computedEdges);
-  }, [computedEdges, setEdges]);
+    }));
+  }, [state.messages, animatingEdge, hoveredEdge, selectedMessage, setEdges]);
 
   // Handle clicking an edge in the graph -> selects matching message in log
   const handleEdgeClick = (_event: React.MouseEvent, edge: Edge) => {
@@ -300,67 +288,38 @@ function App() {
   }, [state.agents]);
 
   return (
-    <div style={{
-      width: "100vw",
-      height: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      background: "#0f172a",
-      color: "#f8fafc",
-      overflow: "hidden",
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
+    <div className="app-shell">
       {/* Top Header & Controls */}
-      <header style={{
-        padding: "12px 24px",
-        background: "#1e293b",
-        borderBottom: "1px solid #334155",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        zIndex: 10
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <header className="app-header">
+        <div className="app-heading-row">
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#fff" }}>
+            <h1 className="app-title">
               Agent Platform · Live Graph & Message Log
             </h1>
-            <p style={{ margin: "2px 0 0", color: "#94a3b8", fontSize: "0.8rem" }}>
+            <p className="app-subtitle">
               {viewingRunId ? (
-                <span style={{ color: "#38bdf8", fontWeight: 600 }}>Viewing Past Run ({viewingRunId.slice(0, 8)}...)</span>
+                <span className="app-past-run">Viewing Past Run ({viewingRunId.slice(0, 8)}...)</span>
               ) : (
                 "Interactive multi-agent conversation tracing with state reducer"
               )}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "0.85rem", color: "#94a3b8" }}>
+          <div className="app-summary">
             <div>
-              Status: <span style={{
-                fontWeight: 700,
-                color: STATUS_COLOR[state.status] ?? "#94a3b8"
-              }} title={state.reason ?? undefined}>{state.status.toUpperCase()}</span>
+              Status: <span className="app-status" style={{ color: STATUS_COLOR[state.status] ?? "#94a3b8" }} title={state.reason ?? undefined}>{state.status.toUpperCase()}</span>
               {state.reason && state.status !== "completed" && (
-                <span style={{ marginLeft: 6, color: "#cbd5e1" }}>— {state.reason}</span>
+                <span className="app-status-reason">— {state.reason}</span>
               )}
             </div>
             <div>
-              Total Tokens: <strong style={{ color: "#f8fafc" }}>{totalTokens}</strong>
+              Total Tokens: <strong className="app-summary-value">{totalTokens}</strong>
             </div>
             <div>
-              Events: <strong style={{ color: "#f8fafc" }}>{state.lastSeq}</strong>
+              Events: <strong className="app-summary-value">{state.lastSeq}</strong>
             </div>
             <button
               onClick={() => setIsAgentModalOpen(true)}
-              style={{
-                background: "#334155",
-                color: "#f8fafc",
-                border: "1px solid #475569",
-                borderRadius: "6px",
-                padding: "6px 12px",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="app-manage-agents"
             >
               ⚙ Manage Agents ({savedAgents.length})
             </button>
@@ -368,22 +327,14 @@ function App() {
         </div>
 
         {/* Debate Topic & Agent Role Pickers */}
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="app-run-controls">
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="Enter debate topic..."
             disabled={isRunning || isStarting}
-            style={{
-              flex: 2,
-              background: "#0f172a",
-              border: "1px solid #334155",
-              color: "#f8fafc",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              fontSize: "0.85rem"
-            }}
+            className="app-topic"
           />
 
           {ROLE_PICKERS.map(({ key, roleLabel, defaultLabel, color }) => (
@@ -394,15 +345,8 @@ function App() {
                 setSelectedAgents((prev) => ({ ...prev, [key]: e.target.value }))
               }
               disabled={isRunning || isStarting}
-              style={{
-                flex: 1,
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color,
-                padding: "8px 10px",
-                borderRadius: "6px",
-                fontSize: "0.82rem",
-              }}
+              className="app-role-picker"
+              style={{ color }}
             >
               <option value="">
                 {roleLabel}: {defaultLabel}
@@ -415,7 +359,7 @@ function App() {
             </select>
           ))}
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "#94a3b8", whiteSpace: "nowrap" }}>
+          <label className="app-turn-limit">
             Turn Limit
             <input
               type="number"
@@ -424,32 +368,14 @@ function App() {
               value={Number.isNaN(turnLimit) ? "" : turnLimit}
               onChange={(e) => setTurnLimit(e.target.valueAsNumber)}
               disabled={isRunning || isStarting}
-              style={{
-                width: 56,
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f8fafc",
-                padding: "7px 8px",
-                borderRadius: "6px",
-                fontSize: "0.82rem",
-              }}
+              className="app-turn-limit-input"
             />
           </label>
 
           {isRunning ? (
             <button
               onClick={() => void stop()}
-              style={{
-                background: "#ef4444",
-                color: "#fff",
-                fontWeight: 600,
-                border: "none",
-                borderRadius: "6px",
-                padding: "8px 18px",
-                cursor: "pointer",
-                fontSize: "0.85rem",
-                whiteSpace: "nowrap"
-              }}
+              className="app-stop"
             >
               ■ Stop
             </button>
@@ -458,17 +384,10 @@ function App() {
               onClick={() => void handleStart()}
               disabled={isStarting || preflightError !== null}
               title={preflightError ?? undefined}
+              className="app-start"
               style={{
                 background: isStarting || preflightError ? "#334155" : "#38bdf8",
                 color: isStarting || preflightError ? "#94a3b8" : "#0f172a",
-                fontWeight: 600,
-                border: "none",
-                borderRadius: "6px",
-                padding: "8px 18px",
-                cursor: isStarting || preflightError ? "not-allowed" : "pointer",
-                fontSize: "0.85rem",
-                transition: "opacity 0.2s",
-                whiteSpace: "nowrap"
               }}
             >
               {isStarting ? "Starting…" : "Start Run"}
@@ -476,14 +395,14 @@ function App() {
           )}
         </div>
         {(startError || (preflightError && !isRunning)) && (
-          <div style={{ fontSize: "0.78rem", color: "#fca5a5" }}>{startError ?? preflightError}</div>
+          <div className="app-error">{startError ?? preflightError}</div>
         )}
       </header>
 
       {/* Main Content Area: Split View (Graph + Message Log) */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div className="app-content">
         {/* Left: React Flow Graph Canvas */}
-        <div style={{ flex: 1, height: "100%", position: "relative" }}>
+        <div className="app-graph">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -495,7 +414,7 @@ function App() {
             fitViewOptions={{ padding: 0.25 }}
           >
             <Background color="#334155" gap={20} size={1.5} />
-            <Controls style={{ background: "#1e293b", border: "#334155", fill: "#f8fafc" }} />
+            <Controls className="app-flow-controls" />
           </ReactFlow>
         </div>
 

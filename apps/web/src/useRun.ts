@@ -26,13 +26,15 @@ const RECONNECT_MS = 1000;
 
 export function useRun() {
   const [state, dispatch] = useReducer(storeReducer, initialState);
-  const [mode, setMode] = useReducer((_: "live" | "replay", m: "live" | "replay") => m, "live");
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
+  const mode = viewingRunId === null ? "live" : "replay";
   const [isStarting, setIsStarting] = useState(false);
   const startingRef = useRef(false);
   const requestVersionRef = useRef(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const runIdRef = useRef<string | null>(null);
+  const lastLiveRunIdRef = useRef<string | null>(null);
   const lastSeqRef = useRef(0);
   const finishedRef = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,7 +106,7 @@ export function useRun() {
       lastSeqRef.current = 0; // a fresh view starts from seq 0
       finishedRef.current = false;
       dispatch({ type: "reset", events: [] });
-      setMode("live");
+      setViewingRunId(null);
       connect(runId);
     },
     [connect],
@@ -126,6 +128,7 @@ export function useRun() {
       const body = await res.json();
       if (version !== requestVersionRef.current) return null;
       if (!res.ok) throw new Error(body.error ?? `Failed to start run (${res.status})`);
+      lastLiveRunIdRef.current = body.runId;
       follow(body.runId);
       return body.runId;
     } catch (err) {
@@ -153,18 +156,18 @@ export function useRun() {
     if (!res.ok) throw new Error(`Failed to load run (${res.status})`);
     const events = (await res.json()) as AgentEvent[];
     if (version !== requestVersionRef.current) return;
-    setMode("replay");
+    setViewingRunId(runId);
     dispatch({ type: "reset", events });
   }
 
   /** Leave replay and show the live run again, if one is being followed. */
-  function returnToLive(lastLiveRunId: string | null) {
+  function returnToLive() {
     requestVersionRef.current += 1;
     startingRef.current = false;
     setIsStarting(false);
-    if (lastLiveRunId) follow(lastLiveRunId);
+    if (lastLiveRunIdRef.current) follow(lastLiveRunIdRef.current);
     else {
-      setMode("live");
+      setViewingRunId(null);
       dispatch({ type: "reset", events: [] });
     }
   }
@@ -174,6 +177,7 @@ export function useRun() {
   return {
     state,
     mode,
+    viewingRunId,
     isStarting,
     isRunning: mode === "live" && state.status === "running",
     isFinished: isFinal(state.status),
