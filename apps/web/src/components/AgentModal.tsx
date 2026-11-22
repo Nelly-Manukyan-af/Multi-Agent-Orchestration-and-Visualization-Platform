@@ -1,12 +1,8 @@
 import React, { useState } from "react";
+import type { AgentRecord } from "@agent-platform/shared";
+import { API_BASE } from "../api.ts";
 
-export interface AgentRecord {
-  id: string;
-  name: string;
-  role: string;
-  model: string;
-  createdAt: number;
-}
+export type { AgentRecord };
 
 interface AgentModalProps {
   isOpen: boolean;
@@ -31,6 +27,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   const [model, setModel] = useState(models[0] ?? "qwen3:8b");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const effectiveModel = models.includes(model) ? model : models[0] ?? "";
 
   if (!isOpen) return null;
 
@@ -56,14 +53,18 @@ export const AgentModal: React.FC<AgentModalProps> = ({
       setError("Please fill in both name and role.");
       return;
     }
+    if (!effectiveModel) {
+      setError("No models available.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
     try {
       const isEditing = editingId !== null;
       const url = isEditing
-        ? `http://localhost:3000/agents/${editingId}`
-        : "http://localhost:3000/agents";
+        ? `${API_BASE}/agents/${editingId}`
+        : `${API_BASE}/agents`;
       const method = isEditing ? "PUT" : "POST";
 
       const res = await fetch(url, {
@@ -72,7 +73,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         body: JSON.stringify({
           name: name.trim(),
           role: role.trim(),
-          model: model || "qwen3:8b",
+          model: effectiveModel,
         }),
       });
 
@@ -82,8 +83,8 @@ export const AgentModal: React.FC<AgentModalProps> = ({
 
       handleCancelEdit();
       onAgentCreated(); // Re-fetches the updated agents list
-    } catch (err: any) {
-      setError(err.message || "Failed to save agent");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save agent");
     } finally {
       setSubmitting(false);
     }
@@ -92,7 +93,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this agent?")) return;
     try {
-      await fetch(`http://localhost:3000/agents/${id}`, { method: "DELETE" });
+      await fetch(`${API_BASE}/agents/${id}`, { method: "DELETE" });
       if (editingId === id) {
         handleCancelEdit();
       }
@@ -252,7 +253,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
                   Ollama Model
                 </label>
                 <select
-                  value={model}
+                  value={effectiveModel}
                   onChange={(e) => setModel(e.target.value)}
                   style={{
                     width: "100%",
@@ -316,7 +317,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               )}
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !effectiveModel}
                 style={{
                   background: editingId ? "#38bdf8" : "#0284c7",
                   color: editingId ? "#0f172a" : "#fff",

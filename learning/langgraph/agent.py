@@ -12,6 +12,7 @@ class State(TypedDict):
     topic: str
     facts: str
     paragraph: str
+    score: str
 
 
 def researcher(state: State) -> dict:
@@ -25,12 +26,19 @@ def writer(state: State) -> dict:
     )
     return {"paragraph": reply.content}
 
+def judge(state: State) -> dict:
+    reply = llm.invoke(
+        f"Give a mark from 0 to 10 for how informative these facts are, with one sentence of reasoning:\n{state['facts']}"
+    )
+    return {"score": reply.content}
 
 builder = StateGraph(State)
 builder.add_node("researcher", researcher)
 builder.add_node("writer", writer)
+builder.add_node("judge", judge)
 builder.add_edge(START, "researcher")
 builder.add_edge("researcher", "writer")
-builder.add_edge("writer", END)
+builder.add_edge("writer", "judge")
+builder.add_edge("judge", END)
 graph = builder.compile()
 

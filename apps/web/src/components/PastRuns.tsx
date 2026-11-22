@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from "react";
+import type { RunRecord } from "@agent-platform/shared";
+import { API_BASE } from "../api.ts";
 
-export interface RunRecord {
-  id: string;
-  task: string;
-  status: "running" | "completed" | "failed" | "stopped";
-  startedAt: number;
-  finishedAt: number | null;
-}
+export type { RunRecord };
 
 interface PastRunsProps {
   currentViewingRunId: string | null;
@@ -20,6 +16,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   running: { bg: "#0284c7", text: "#38bdf8" },
   failed: { bg: "#991b1b", text: "#fca5a5" },
   stopped: { bg: "#334155", text: "#94a3b8" },
+  loop_detected: { bg: "#92400e", text: "#fcd34d" },
+  turn_limit_reached: { bg: "#92400e", text: "#fcd34d" },
 };
 
 export const PastRuns: React.FC<PastRunsProps> = ({
@@ -34,7 +32,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
   const fetchRuns = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/runs");
+      const res = await fetch(`${API_BASE}/runs`);
       if (res.ok) {
         const data = await res.json();
         setRuns(data);
@@ -68,7 +66,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
           <h3 style={{ margin: 0, fontSize: "0.92rem", color: "#f8fafc", fontWeight: 600 }}>
             Past Runs ({runs.length})
           </h3>
-          {!isLive && (
+          {currentViewingRunId !== null && !isLive && (
             <button
               onClick={onBackToLive}
               style={{
@@ -82,7 +80,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
                 fontWeight: 600,
               }}
             >
-              ← Back to Live Debate
+              ← Back to Live Run
             </button>
           )}
         </div>
@@ -106,7 +104,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
       <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
         {runs.length === 0 ? (
           <div style={{ color: "#64748b", fontSize: "0.8rem", padding: "8px 0" }}>
-            No saved runs yet. Start a debate to see it saved in SQLite.
+            No saved runs yet. Start a run to see it saved.
           </div>
         ) : (
           runs.map((r) => {
@@ -125,7 +123,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  background: isSelected ? "#0f172a" : "#0f172a",
+                  background: "#0f172a",
                   border: isSelected ? "1px solid #38bdf8" : "1px solid #334155",
                   padding: "6px 12px",
                   borderRadius: "6px",
@@ -144,7 +142,7 @@ export const PastRuns: React.FC<PastRunsProps> = ({
                       textTransform: "uppercase",
                     }}
                   >
-                    {r.status}
+                    {r.status.replace(/_/g, " ")}
                   </span>
                   <span
                     style={{
@@ -163,14 +161,15 @@ export const PastRuns: React.FC<PastRunsProps> = ({
 
                 <button
                   onClick={() => onSelectRun(r.id)}
+                  disabled={isLive}
                   style={{
                     background: isSelected ? "#38bdf8" : "#334155",
-                    color: isSelected ? "#0f172a" : "#f8fafc",
+                    color: isSelected ? "#0f172a" : isLive ? "#64748b" : "#f8fafc",
                     border: "none",
                     borderRadius: "4px",
                     padding: "3px 10px",
                     fontSize: "0.75rem",
-                    cursor: "pointer",
+                    cursor: isLive ? "not-allowed" : "pointer",
                     fontWeight: 600,
                     marginLeft: "8px",
                   }}

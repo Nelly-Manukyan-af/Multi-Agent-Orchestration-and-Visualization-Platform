@@ -64,23 +64,28 @@ export async function chat(
   let buffer = ""; // network chunks can end in the middle of a line, so keep the rest here
   const decoder = new TextDecoder();
 
+  const consumeLine = (line: string) => {
+    if (!line.trim()) return;
+    const chunk: StreamChunk = JSON.parse(line);
+    if (chunk.error) throw new Error(`Ollama stream error: ${chunk.error}`);
+    const piece = chunk.message?.content ?? "";
+    if (piece) {
+      content += piece;
+      onToken?.(piece);
+    }
+    if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls);
+    if (chunk.done) final = chunk;
+  };
+
   for await (const bytes of response.body) {
     buffer += decoder.decode(bytes, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? ""; // the last line may be unfinished: wait for the next chunk
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const chunk: StreamChunk = JSON.parse(line);
-      const piece = chunk.message?.content ?? "";
-      if (piece) {
-        content += piece;
-        onToken?.(piece);
-      }
-      if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls); // tool calls arrive whole
-      if (chunk.done) final = chunk;
-    }
+    for (const line of lines) consumeLine(line);
   }
+  consumeLine(buffer + decoder.decode());
+  if (!final) throw new Error("Ollama stream ended before completion");
 
   return {
     message: { role: "assistant", content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) },
@@ -92,6 +97,7 @@ export async function chat(
 
 // One line of Ollama's streamed reply.
 type StreamChunk = {
+  error?: string;
   message?: { content?: string; tool_calls?: ToolCall[] };
   done: boolean;
   prompt_eval_count?: number;

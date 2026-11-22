@@ -1,8 +1,10 @@
 import React from "react";
-import type { MessageItem } from "../runState.ts";
+import type { MessageItem, TurnState } from "@agent-platform/shared";
 
 interface MessageLogProps {
   messages: MessageItem[];
+  agentNames: Record<string, string>;
+  turns: Record<string, TurnState>;
   activeEdge: { from: string; to: string } | null;
   selectedMessageId: string | null;
   onSelectMessage: (id: string | null) => void;
@@ -13,11 +15,13 @@ const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
   pro: { bg: "#1e3a8a", text: "#93c5fd" },
   con: { bg: "#7f1d1d", text: "#fca5a5" },
   judge: { bg: "#713f12", text: "#fef08a" },
-  all: { bg: "#334155", text: "#cbd5e1" },
+  final: { bg: "#14532d", text: "#86efac" },
 };
 
 export const MessageLog: React.FC<MessageLogProps> = ({
   messages,
+  agentNames,
+  turns,
   activeEdge,
   selectedMessageId,
   onSelectMessage,
@@ -90,24 +94,30 @@ export const MessageLog: React.FC<MessageLogProps> = ({
           </div>
         ) : (
           messages.map((msg, index) => {
-            const isSelected = selectedMessageId === msg.id;
+            const id = String(msg.seq);
+            const isSelected = selectedMessageId === id;
+            const isFinal = msg.to.length === 0; // final output: no recipient, no edge (FR6.2)
             const isMatchingActiveEdge =
-              activeEdge &&
-              activeEdge.from === msg.from &&
-              (activeEdge.to === msg.to || msg.to === "all");
+              activeEdge !== null && activeEdge.from === msg.from && msg.to.includes(activeEdge.to);
 
             const fromColor = AGENT_COLORS[msg.from] ?? { bg: "#334155", text: "#fff" };
-            const toColor = AGENT_COLORS[msg.to] ?? { bg: "#334155", text: "#fff" };
+            const toKey = isFinal ? "final" : msg.to[0];
+            const toColor = AGENT_COLORS[toKey] ?? { bg: "#334155", text: "#fff" };
+            const toLabel = isFinal
+              ? "FINAL ANSWER"
+              : msg.to.map((t) => (agentNames[t] ?? t).toUpperCase()).join(", ");
 
+            const turn = turns[msg.turnId];
+            const tokens = turn?.usage?.completionTokens;
             const durationSec =
-              msg.durationMs !== undefined ? (msg.durationMs / 1000).toFixed(1) + " s" : null;
+              turn?.durationMs != null ? (turn.durationMs / 1000).toFixed(1) + " s" : null;
 
             return (
               <div
-                key={msg.id || index}
-                onClick={() => onSelectMessage(isSelected ? null : msg.id)}
+                key={id || index}
+                onClick={() => onSelectMessage(isSelected ? null : id)}
                 onMouseEnter={() =>
-                  onHoverEdge(msg.to === "all" ? null : { from: msg.from, to: msg.to })
+                  onHoverEdge(isFinal ? null : { from: msg.from, to: msg.to[0] })
                 }
                 onMouseLeave={() => onHoverEdge(null)}
                 style={{
@@ -146,7 +156,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({
                         color: fromColor.text,
                       }}
                     >
-                      {msg.from.toUpperCase()}
+                      {(agentNames[msg.from] ?? msg.from).toUpperCase()}
                     </span>
                     <span style={{ color: "#64748b", fontSize: "0.8rem" }}>→</span>
                     <span
@@ -159,7 +169,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({
                         color: toColor.text,
                       }}
                     >
-                      {msg.to.toUpperCase()}
+                      {toLabel}
                     </span>
                   </div>
 
@@ -170,10 +180,10 @@ export const MessageLog: React.FC<MessageLogProps> = ({
                       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                     }}
                   >
-                    {msg.tokens !== undefined && (
-                      <span>{msg.tokens} tokens</span>
+                    {tokens !== undefined && (
+                      <span>{tokens} tokens</span>
                     )}
-                    {msg.tokens !== undefined && durationSec && <span> · </span>}
+                    {tokens !== undefined && durationSec && <span> · </span>}
                     {durationSec && <span>{durationSec}</span>}
                   </div>
                 </div>
@@ -190,7 +200,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({
                     wordBreak: "break-word",
                   }}
                 >
-                  "{msg.content}"
+                  "{msg.text}"
                 </p>
               </div>
             );

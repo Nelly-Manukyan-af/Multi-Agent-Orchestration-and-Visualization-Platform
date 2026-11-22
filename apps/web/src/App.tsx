@@ -10,11 +10,15 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './App.css';
+import type { AgentRecord, AgentSelection } from '@agent-platform/shared';
+import { minTurnLimit as minTurnLimitFor, DEFAULT_TURN_LIMIT } from '@agent-platform/shared';
+import { STATUS_COLOR } from './status.ts';
+import { API_BASE } from './api.ts';
 import { useRun } from './useRun.ts';
 import { AgentNode } from './components/AgentNode.tsx';
 import { MessageLog } from './components/MessageLog.tsx';
 import { PastRuns } from './components/PastRuns.tsx';
-import { AgentModal, type AgentRecord } from './components/AgentModal.tsx';
+import { AgentModal } from './components/AgentModal.tsx';
 
 const POSITIONS: Record<string, { x: number; y: number }> = {
   pro: { x: 60, y: 50 },
@@ -28,6 +32,17 @@ const DEFAULT_LABELS: Record<string, string> = {
   judge: "Judge",
 };
 
+const ROLE_PICKERS: {
+  key: keyof AgentSelection;
+  roleLabel: string;
+  defaultLabel: string;
+  color: string;
+}[] = [
+  { key: "proId", roleLabel: "Pro", defaultLabel: "Default Pro", color: "#93c5fd" },
+  { key: "conId", roleLabel: "Con", defaultLabel: "Default Con", color: "#fca5a5" },
+  { key: "judgeId", roleLabel: "Judge", defaultLabel: "Default Judge", color: "#fef08a" },
+];
+
 const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
   id,
   type: "agent",
@@ -38,28 +53,43 @@ const initialNodes: Node[] = Object.keys(POSITIONS).map((id) => ({
     status: "idle",
     liveText: "",
     tokens: 0,
+    activeTool: null,
   },
 }));
 
+const ROUNDS = 3;
+
 function App() {
   const [topic, setTopic] = useState("Remote work is better than office work");
-  const { events, state, start, loadEvents } = useRun();
+  const { state, isRunning, isStarting, start, stop, replay, returnToLive } = useRun();
   const [viewingRunId, setViewingRunId] = useState<string | null>(null);
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const [turnLimit, setTurnLimit] = useState(DEFAULT_TURN_LIMIT);
+  const [startError, setStartError] = useState<string | null>(null);
+  const minTurnLimit = minTurnLimitFor("group_discussion", { rounds: ROUNDS, debaters: 2 });
+  const preflightError = !topic.trim()
+    ? "Enter a task."
+    : !Number.isInteger(turnLimit) || turnLimit < 1 || turnLimit > 50
+    ? "Turn Limit must be 1–50."
+    : turnLimit < minTurnLimit
+    ? `Turn Limit must be at least ${minTurnLimit} for ${ROUNDS} rounds.`
+    : null;
 
   // Custom agent configuration & modal state
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [savedAgents, setSavedAgents] = useState<AgentRecord[]>([]);
   const [availableModels, setAvailableModels] = useState<string[]>(["qwen3:8b"]);
-  const [selectedProId, setSelectedProId] = useState<string>("");
-  const [selectedConId, setSelectedConId] = useState<string>("");
-  const [selectedJudgeId, setSelectedJudgeId] = useState<string>("");
+  const [selectedAgents, setSelectedAgents] = useState<AgentSelection>({
+    proId: "",
+    conId: "",
+    judgeId: "",
+  });
 
   // Controlled React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Edge animation & interaction states
-  const [animatingEdge, setAnimatingEdge] = useState<{ from: string; to: string } | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<{ from: string; to: string } | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
@@ -69,12 +99,18 @@ function App() {
   const loadAgentsAndModels = async () => {
     try {
       const [agentsRes, modelsRes] = await Promise.all([
-        fetch("http://localhost:3000/agents"),
-        fetch("http://localhost:3000/models"),
+        fetch(`${API_BASE}/agents`),
+        fetch(`${API_BASE}/models`),
       ]);
       if (agentsRes.ok) {
-        const data = await agentsRes.json();
+        const data: AgentRecord[] = await agentsRes.json();
         setSavedAgents(data);
+        const validIds = new Set(data.map((a) => a.id));
+        setSelectedAgents((prev) => ({
+          proId: prev.proId && !validIds.has(prev.proId) ? "" : prev.proId,
+          conId: prev.conId && !validIds.has(prev.conId) ? "" : prev.conId,
+          judgeId: prev.judgeId && !validIds.has(prev.judgeId) ? "" : prev.judgeId,
+        }));
       }
       if (modelsRes.ok) {
         const data = await modelsRes.json();
@@ -89,70 +125,88 @@ function App() {
     loadAgentsAndModels();
   }, []);
 
-  // Compute active agent labels based on selection
+  // Compute active agent labels based on live selection
   const activeLabels = useMemo(() => {
-    const proAgent = savedAgents.find((a) => a.id === selectedProId);
-    const conAgent = savedAgents.find((a) => a.id === selectedConId);
-    const judgeAgent = savedAgents.find((a) => a.id === selectedJudgeId);
+    const proAgent = savedAgents.find((a) => a.id === selectedAgents.proId);
+    const conAgent = savedAgents.find((a) => a.id === selectedAgents.conId);
+    const judgeAgent = savedAgents.find((a) => a.id === selectedAgents.judgeId);
 
     return {
-      pro: proAgent ? proAgent.name : "Pro Agent",
-      con: conAgent ? conAgent.name : "Con Agent",
-      judge: judgeAgent ? judgeAgent.name : "Judge",
+      pro: proAgent ? proAgent.name : DEFAULT_LABELS.pro,
+      con: conAgent ? conAgent.name : DEFAULT_LABELS.con,
+      judge: judgeAgent ? judgeAgent.name : DEFAULT_LABELS.judge,
     };
-  }, [savedAgents, selectedProId, selectedConId, selectedJudgeId]);
+  }, [savedAgents, selectedAgents]);
 
   // Update node data without blowing away node measurements or positions
   useEffect(() => {
     setNodes((prevNodes) =>
       prevNodes.map((node) => {
         const agent = state.agents[node.id];
+        const fallbackLabel = DEFAULT_LABELS[node.id] ?? node.id.toUpperCase();
+        const label = viewingRunId
+          ? agent?.name ?? fallbackLabel
+          : state.status !== "idle"
+          ? agent?.name ?? activeLabels[node.id as keyof typeof activeLabels] ?? fallbackLabel
+          : activeLabels[node.id as keyof typeof activeLabels] ?? fallbackLabel;
+
         return {
           ...node,
           data: {
             ...node.data,
-            label: activeLabels[node.id as keyof typeof activeLabels] ?? node.id.toUpperCase(),
+            label,
             agentId: node.id,
             status: agent?.status ?? "idle",
             liveText: agent?.liveText ?? "",
             tokens: agent?.tokens ?? 0,
+            activeTool: agent?.activeTool ?? null,
           },
         };
       })
     );
-  }, [state.agents, activeLabels, setNodes]);
+  }, [state.agents, state.status, viewingRunId, activeLabels, setNodes]);
 
-  // Keep active edge animated for ~1.5s after a message arrives
+  // Edge glow for 1.5 s when a Message is delivered: a visual effect only, not state (FR6.2)
+  const lastMessage = state.messages.at(-1);
+  const [glowExpiredSeq, setGlowExpiredSeq] = useState(0);
   useEffect(() => {
-    if (state.activeEdge) {
-      setAnimatingEdge(state.activeEdge);
-      const timer = setTimeout(() => {
-        setAnimatingEdge(null);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [state.activeEdge, state.messages.length]);
+    if (!lastMessage) return;
+    const timer = setTimeout(() => setGlowExpiredSeq(lastMessage.seq), 1500);
+    return () => clearTimeout(timer);
+  }, [lastMessage]);
+  const animatingEdge = useMemo(
+    () =>
+      lastMessage && lastMessage.seq !== glowExpiredSeq && lastMessage.to.length > 0
+        ? { from: lastMessage.from, to: lastMessage.to[0] }
+        : null,
+    [lastMessage, glowExpiredSeq],
+  );
 
-  const handleStart = () => {
-    if (!topic.trim()) return;
+  const handleStart = async () => {
+    if (preflightError || isStarting || isRunning) return;
     setViewingRunId(null);
     setSelectedMessageId(null);
-    start(topic.trim(), {
-      proId: selectedProId || undefined,
-      conId: selectedConId || undefined,
-      judgeId: selectedJudgeId || undefined,
-    });
+    setStartError(null);
+    try {
+      const runId = await start({
+        task: topic.trim(),
+        turnLimit,
+        rounds: ROUNDS,
+        proId: selectedAgents.proId || undefined,
+        conId: selectedAgents.conId || undefined,
+        judgeId: selectedAgents.judgeId || undefined,
+      });
+      if (runId) setLiveRunId(runId);
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const handleSelectRun = async (runId: string) => {
     setViewingRunId(runId);
     setSelectedMessageId(null);
     try {
-      const res = await fetch(`http://localhost:3000/runs/${runId}/events`);
-      if (res.ok) {
-        const pastEvents = await res.json();
-        loadEvents(pastEvents);
-      }
+      await replay(runId);
     } catch (err) {
       console.error("Failed to load past run events:", err);
     }
@@ -161,54 +215,45 @@ function App() {
   const handleBackToLive = () => {
     setViewingRunId(null);
     setSelectedMessageId(null);
-    loadEvents([]);
+    returnToLive(liveRunId);
   };
 
   // Selected message details for edge highlighting
   const selectedMessage = useMemo(() => {
-    return state.messages.find((m) => m.id === selectedMessageId);
+    return state.messages.find((m) => String(m.seq) === selectedMessageId);
   }, [state.messages, selectedMessageId]);
 
   // Build React Flow edges with explicit sourceHandle and targetHandle
   const computedEdges: Edge[] = useMemo(() => {
     const pairCounts: Record<string, { from: string; to: string; count: number }> = {};
 
+    // Each recipient gets one edge; a final answer (to = []) has no edge (FR6.2).
     for (const msg of state.messages) {
-      if (msg.to === "all") {
-        const pairPro = `${msg.from}->pro`;
-        const pairCon = `${msg.from}->con`;
-        pairCounts[pairPro] = { from: msg.from, to: "pro", count: (pairCounts[pairPro]?.count ?? 0) + 1 };
-        pairCounts[pairCon] = { from: msg.from, to: "con", count: (pairCounts[pairCon]?.count ?? 0) + 1 };
-      } else {
-        const pair = `${msg.from}->${msg.to}`;
-        pairCounts[pair] = { from: msg.from, to: msg.to, count: (pairCounts[pair]?.count ?? 0) + 1 };
+      for (const to of msg.to) {
+        const pair = `${msg.from}->${to}`;
+        pairCounts[pair] = { from: msg.from, to, count: (pairCounts[pair]?.count ?? 0) + 1 };
       }
     }
 
     return Object.entries(pairCounts).map(([pairKey, { from, to, count }]) => {
-      const isLiveTransmitting =
-        animatingEdge?.from === from && (animatingEdge?.to === to || animatingEdge?.to === "all");
-
-      const isHovered =
-        hoveredEdge?.from === from && (hoveredEdge?.to === to || hoveredEdge?.to === "all");
-
-      const isSelected =
-        selectedMessage?.from === from && (selectedMessage?.to === to || selectedMessage?.to === "all");
+      const isLiveTransmitting = animatingEdge?.from === from && animatingEdge?.to === to;
+      const isHovered = hoveredEdge?.from === from && hoveredEdge?.to === to;
+      const isSelected = selectedMessage?.from === from && selectedMessage.to.includes(to);
 
       const isHighlighted = isLiveTransmitting || isHovered || isSelected;
 
-      let sourceHandle = "bottom";
-      let targetHandle = "top";
+      let sourceHandle = "source-bottom";
+      let targetHandle = "target-top";
 
       if (from === "pro" && to === "con") {
-        sourceHandle = "right";
-        targetHandle = "left";
+        sourceHandle = "source-right";
+        targetHandle = "target-left";
       } else if (from === "con" && to === "pro") {
-        sourceHandle = "left";
-        targetHandle = "right";
+        sourceHandle = "source-left";
+        targetHandle = "target-right";
       } else if (from === "judge") {
-        sourceHandle = "top";
-        targetHandle = "bottom";
+        sourceHandle = "source-top";
+        targetHandle = "target-bottom";
       }
 
       return {
@@ -243,12 +288,9 @@ function App() {
   const handleEdgeClick = (_event: React.MouseEvent, edge: Edge) => {
     const matchingMsg = [...state.messages]
       .reverse()
-      .find(
-        (m) =>
-          m.from === edge.source && (m.to === edge.target || m.to === "all")
-      );
+      .find((m) => m.from === edge.source && m.to.includes(edge.target));
     if (matchingMsg) {
-      setSelectedMessageId(matchingMsg.id);
+      setSelectedMessageId(String(matchingMsg.seq));
     }
   };
 
@@ -295,14 +337,17 @@ function App() {
             <div>
               Status: <span style={{
                 fontWeight: 700,
-                color: state.status === "completed" ? "#22c55e" : state.status === "running" ? "#38bdf8" : state.status === "failed" ? "#ef4444" : "#94a3b8"
-              }}>{state.status.toUpperCase()}</span>
+                color: STATUS_COLOR[state.status] ?? "#94a3b8"
+              }} title={state.reason ?? undefined}>{state.status.toUpperCase()}</span>
+              {state.reason && state.status !== "completed" && (
+                <span style={{ marginLeft: 6, color: "#cbd5e1" }}>— {state.reason}</span>
+              )}
             </div>
             <div>
               Total Tokens: <strong style={{ color: "#f8fafc" }}>{totalTokens}</strong>
             </div>
             <div>
-              Events: <strong style={{ color: "#f8fafc" }}>{events.length}</strong>
+              Events: <strong style={{ color: "#f8fafc" }}>{state.lastSeq}</strong>
             </div>
             <button
               onClick={() => setIsAgentModalOpen(true)}
@@ -329,7 +374,7 @@ function App() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="Enter debate topic..."
-            disabled={state.status === "running"}
+            disabled={isRunning || isStarting}
             style={{
               flex: 2,
               background: "#0f172a",
@@ -341,94 +386,98 @@ function App() {
             }}
           />
 
-          {/* Pro Agent Selection */}
-          <select
-            value={selectedProId}
-            onChange={(e) => setSelectedProId(e.target.value)}
-            disabled={state.status === "running"}
-            style={{
-              flex: 1,
-              background: "#0f172a",
-              border: "1px solid #334155",
-              color: "#93c5fd",
-              padding: "8px 10px",
-              borderRadius: "6px",
-              fontSize: "0.82rem",
-            }}
-          >
-            <option value="">Pro: Default Pro</option>
-            {savedAgents.map((a) => (
-              <option key={a.id} value={a.id}>
-                Pro: {a.name} ({a.model})
+          {ROLE_PICKERS.map(({ key, roleLabel, defaultLabel, color }) => (
+            <select
+              key={key}
+              value={selectedAgents[key] ?? ""}
+              onChange={(e) =>
+                setSelectedAgents((prev) => ({ ...prev, [key]: e.target.value }))
+              }
+              disabled={isRunning || isStarting}
+              style={{
+                flex: 1,
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color,
+                padding: "8px 10px",
+                borderRadius: "6px",
+                fontSize: "0.82rem",
+              }}
+            >
+              <option value="">
+                {roleLabel}: {defaultLabel}
               </option>
-            ))}
-          </select>
+              {savedAgents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {roleLabel}: {a.name} ({a.model})
+                </option>
+              ))}
+            </select>
+          ))}
 
-          {/* Con Agent Selection */}
-          <select
-            value={selectedConId}
-            onChange={(e) => setSelectedConId(e.target.value)}
-            disabled={state.status === "running"}
-            style={{
-              flex: 1,
-              background: "#0f172a",
-              border: "1px solid #334155",
-              color: "#fca5a5",
-              padding: "8px 10px",
-              borderRadius: "6px",
-              fontSize: "0.82rem",
-            }}
-          >
-            <option value="">Con: Default Con</option>
-            {savedAgents.map((a) => (
-              <option key={a.id} value={a.id}>
-                Con: {a.name} ({a.model})
-              </option>
-            ))}
-          </select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "#94a3b8", whiteSpace: "nowrap" }}>
+            Turn Limit
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={Number.isNaN(turnLimit) ? "" : turnLimit}
+              onChange={(e) => setTurnLimit(e.target.valueAsNumber)}
+              disabled={isRunning || isStarting}
+              style={{
+                width: 56,
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color: "#f8fafc",
+                padding: "7px 8px",
+                borderRadius: "6px",
+                fontSize: "0.82rem",
+              }}
+            />
+          </label>
 
-          {/* Judge Agent Selection */}
-          <select
-            value={selectedJudgeId}
-            onChange={(e) => setSelectedJudgeId(e.target.value)}
-            disabled={state.status === "running"}
-            style={{
-              flex: 1,
-              background: "#0f172a",
-              border: "1px solid #334155",
-              color: "#fef08a",
-              padding: "8px 10px",
-              borderRadius: "6px",
-              fontSize: "0.82rem",
-            }}
-          >
-            <option value="">Judge: Default Judge</option>
-            {savedAgents.map((a) => (
-              <option key={a.id} value={a.id}>
-                Judge: {a.name} ({a.model})
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={handleStart}
-            disabled={state.status === "running"}
-            style={{
-              background: state.status === "running" ? "#334155" : "#38bdf8",
-              color: state.status === "running" ? "#94a3b8" : "#0f172a",
-              fontWeight: 600,
-              border: "none",
-              borderRadius: "6px",
-              padding: "8px 18px",
-              cursor: state.status === "running" ? "not-allowed" : "pointer",
-              fontSize: "0.85rem",
-              transition: "opacity 0.2s",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {state.status === "running" ? "Debate Running..." : "Start Debate"}
-          </button>
+          {isRunning ? (
+            <button
+              onClick={() => void stop()}
+              style={{
+                background: "#ef4444",
+                color: "#fff",
+                fontWeight: 600,
+                border: "none",
+                borderRadius: "6px",
+                padding: "8px 18px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                whiteSpace: "nowrap"
+              }}
+            >
+              ■ Stop
+            </button>
+          ) : (
+            <button
+              onClick={() => void handleStart()}
+              disabled={isStarting || preflightError !== null}
+              title={preflightError ?? undefined}
+              style={{
+                background: isStarting || preflightError ? "#334155" : "#38bdf8",
+                color: isStarting || preflightError ? "#94a3b8" : "#0f172a",
+                fontWeight: 600,
+                border: "none",
+                borderRadius: "6px",
+                padding: "8px 18px",
+                cursor: isStarting || preflightError ? "not-allowed" : "pointer",
+                fontSize: "0.85rem",
+                transition: "opacity 0.2s",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {isStarting ? "Starting…" : "Start Run"}
+            </button>
+          )}
         </div>
+        {(startError || (preflightError && !isRunning)) && (
+          <div style={{ fontSize: "0.78rem", color: "#fca5a5" }}>{startError ?? preflightError}</div>
+        )}
       </header>
 
       {/* Main Content Area: Split View (Graph + Message Log) */}
@@ -453,6 +502,8 @@ function App() {
         {/* Right: Message Log Sidebar */}
         <MessageLog
           messages={state.messages}
+          agentNames={Object.fromEntries(Object.values(state.agents).map((a) => [a.id, a.name]))}
+          turns={state.turns}
           activeEdge={animatingEdge}
           selectedMessageId={selectedMessageId}
           onSelectMessage={setSelectedMessageId}
@@ -465,7 +516,7 @@ function App() {
         currentViewingRunId={viewingRunId}
         onSelectRun={handleSelectRun}
         onBackToLive={handleBackToLive}
-        isLive={state.status === "running"}
+        isLive={isRunning || isStarting}
       />
 
       {/* Custom Agent Management Modal */}

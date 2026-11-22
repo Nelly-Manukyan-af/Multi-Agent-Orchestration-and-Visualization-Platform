@@ -6,3 +6,11 @@ dist/
 .idea
 .crewai
 learning/langgraph/.langgraph_api
+.agents
+.venv/
+__pycache__/
+*.pyc
+*.db-shm
+*.db-wal
+/docs/
+/reports/

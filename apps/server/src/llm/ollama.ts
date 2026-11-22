@@ -31,29 +31,43 @@ export type ChatResult = {
     promptTokens: number; // tokens the model read
     outputTokens: number; // tokens the model wrote
     durationMs: number;
+    truncated: boolean; // the reply was cut off at maxTokens
 };
 
+export type ChatOptions = {
+    model?: string;
+    temperature?: number; // 0 = predictable, higher = more creative
+    maxTokens?: number;
+    signal?: AbortSignal; // Stop (FR4.2) aborts the request immediately
+};
+
+// NOTE: Phase 3 replaces this Ollama-native client with one OpenAI-compatible
+// ModelClient (SR-LLM, ADR-0001).
 export async function chat(
     messages: Message[],
     tools?: ToolDefinition[],
     onToken?: (text: string) => void, // called with each new piece of text as it arrives
-    model?:string,
+    options: ChatOptions = {},
 ): Promise<ChatResult> {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: options.signal,
         body: JSON.stringify({
-            model: model || MODEL,
+            model: options.model || MODEL,
             messages,
             tools,
             stream: true, // send the answer in small pieces, one JSON object per line
             think: false, // Qwen 3 can "think" before answering; off = faster
-            options: { temperature: 0.7 }, // 0 = predictable, higher = more creative
+            options: {
+                temperature: options.temperature ?? 0.7,
+                ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
+            },
         }),
     });
 
     if (!response.ok || !response.body) {
-        throw new Error(`Ollama returned ${response.status}: ${await response.text()}`);
+        throw new Error(`Ollama returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
     }
 
     let content = ""; // the full answer, built from the pieces
@@ -62,36 +76,44 @@ export async function chat(
     let buffer = ""; // network chunks can end in the middle of a line, so keep the rest here
     const decoder = new TextDecoder();
 
+    const consumeLine = (line: string) => {
+        if (!line.trim()) return;
+        const chunk: StreamChunk = JSON.parse(line);
+        if (chunk.error) throw new Error(`Ollama stream error: ${chunk.error}`);
+        const piece = chunk.message?.content ?? "";
+        if (piece) {
+            content += piece;
+            onToken?.(piece);
+        }
+        if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls);
+        if (chunk.done) final = chunk;
+    };
+
     for await (const bytes of response.body) {
         buffer += decoder.decode(bytes, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? ""; // the last line may be unfinished: wait for the next chunk
 
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            const chunk: StreamChunk = JSON.parse(line);
-            const piece = chunk.message?.content ?? "";
-            if (piece) {
-                content += piece;
-                onToken?.(piece);
-            }
-            if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls); // tool calls arrive whole
-            if (chunk.done) final = chunk;
-        }
+        for (const line of lines) consumeLine(line);
     }
+    consumeLine(buffer + decoder.decode());
+    if (!final) throw new Error("Ollama stream ended before completion");
 
     return {
         message: { role: "assistant", content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) },
         promptTokens: final?.prompt_eval_count ?? 0,
         outputTokens: final?.eval_count ?? 0,
         durationMs: Math.round((final?.total_duration ?? 0) / 1e6),
+        truncated: final?.done_reason === "length",
     };
 }
 
 // One line of Ollama's streamed reply.
 type StreamChunk = {
+    error?: string;
     message?: { content?: string; tool_calls?: ToolCall[] };
     done: boolean;
+    done_reason?: string;
     prompt_eval_count?: number;
     eval_count?: number;
     total_duration?: number; // nanoseconds
